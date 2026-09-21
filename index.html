@@ -8112,68 +8112,81 @@ if(guideDrag){
   if(!gd){ guideDrag = null; }
   else {
     if(!guideDrag.moved) guideDrag.moved = true;
-    guideDrag.curW = {x: w.x, y: w.y};
-    var dxm = w.x - guideDrag.startW.x;
-    var dym = w.y - guideDrag.startW.y;
 
-        if(guideDrag.mode === 'slide'){
-      /* ═══ Параллельный сдвиг ═══
-         Приоритет привязок: OSNAP → сетка.
-         • OSNAP: если рядом есть endpoint/midpoint/center/intersection
-           другого объекта, берём точку оттуда.
-         • Сетка: как fallback, если OSNAP ничего не нашёл. */
-      var useW = w;
-      var snappedPt = null;
-      if(typeof osnap !== 'undefined' && osnap.on){
-        snappedPt = snapToObjects(w, null);   /* обновляет lastSnap → маркер */
-        if(snappedPt) useW = snappedPt;
-      }
-      var newPos;
-      if(guideDrag.kind === 'h'){
-        newPos = guideDrag.origPos - (useW.y - guideDrag.startW.y);
-      } else {
-        newPos = guideDrag.origPos + (useW.x - guideDrag.startW.x);
-      }
-      if(!snappedPt && grid.snap && grid.size > 0){
-        newPos = Math.round(newPos / grid.size) * grid.size;
-      }
-      gd.pos = newPos;
-    } else {
-      /* ═══ Свободный поворот (Shift) ═══
-         Приоритет привязок: OSNAP → свободный угол.
-         Если пользователь навёл курсор на OSNAP-точку, направляющая
-         развернётся так, чтобы пройти ТОЧНО через неё. */
-      var useWR = w;
-      if(typeof osnap !== 'undefined' && osnap.on){
-        var snappedRot = snapToObjects(w, null);
-        if(snappedRot) useWR = snappedRot;
-      }
-      var vx = useWR.x - guideDrag.anchor.x;
-      var vy = useWR.y - guideDrag.anchor.y;
-            if(Math.hypot(vx, vy) > worldTol(6)){
-        var beta;
-        if(guideDrag.kind === 'h'){
-          beta = Math.atan2(-vy, vx);
-        } else {
-          beta = Math.atan2(-vx, -vy);
-        }
-        gd.angle = beta * 180 / Math.PI;
-      }
+    /* ═══ 1. Привязка ищется от КУРСОРА ═══
+       Пользователь наводит курсор на OSNAP-точку — привязка
+       срабатывает на неё. Затем направляющая «прыгает» так,
+       чтобы пройти ТОЧНО через эту точку, а ghost встаёт в неё. */
+    var snappedPt = null;
+    if(typeof osnap !== 'undefined' && osnap.on){
+      snappedPt = snapToObjects(w, null);
     }
 
-    /* ═══ Ghost-кружок: проекция курсора на направляющую ═══
-       Раньше ghost ехал за курсором напрямую — на наклонных направляющих
-       он отрывался от линии. Теперь проецируем курсор на текущую
-       направляющую: ghost всегда лежит на ней, скользя вдоль. */
-    var pdCur = guideAnchorAndDir(gd);
-    var Dcur = pdCur.D;
-    var P0cur = pdCur.P0;
-    var ux = w.x - P0cur.x;
-    var uy = w.y - P0cur.y;
-    var tProj = ux * Dcur.x + uy * Dcur.y;   /* D — единичный вектор */
-    var projX = P0cur.x + Dcur.x * tProj;
-    var projY = P0cur.y + Dcur.y * tProj;
-    guideDrag.curW = {x: projX, y: projY};
+    if(snappedPt){
+      /* ═══ 2a. Привязка сработала ═══
+         Направляющая должна пройти точно через snappedPt.
+         Решаем уравнение «точка лежит на прямой» относительно pos. */
+      if(guideDrag.mode === 'slide'){
+        var aRad = (gd.angle || 0) * Math.PI / 180;
+        var tanA = Math.tan(aRad);
+        if(isFinite(tanA)){
+          if(guideDrag.kind === 'h'){
+            /* Направляющая h: P0 = (0, -pos), D = (cos a, -sin a).
+               Точка (sx, sy) лежит на ней ⟺ sy = -pos - sx·tan(a). */
+            gd.pos = -snappedPt.y - snappedPt.x * tanA;
+          } else {
+            /* Направляющая v: P0 = (pos, 0), D = (-sin a, -cos a).
+               Точка (sx, sy) лежит на ней ⟺ sx = pos + sy·tan(a). */
+            gd.pos = snappedPt.x - snappedPt.y * tanA;
+          }
+        }
+      } else {
+        /* Поворот: вращаем вокруг anchor так, чтобы направляющая
+           прошла через snappedPt. Остаток старой логики — только
+           цель теперь не курсор, а точка привязки. */
+        var vxR = snappedPt.x - guideDrag.anchor.x;
+        var vyR = snappedPt.y - guideDrag.anchor.y;
+        if(Math.hypot(vxR, vyR) > worldTol(6)){
+          var betaR;
+          if(guideDrag.kind === 'h') betaR = Math.atan2(-vyR, vxR);
+          else betaR = Math.atan2(-vxR, -vyR);
+          gd.angle = betaR * 180 / Math.PI;
+        }
+      }
+      /* Ghost «прилипает» к точке привязки — визуально она теперь
+         на самой направляющей. */
+      guideDrag.curW = { x: snappedPt.x, y: snappedPt.y };
+    } else {
+      /* ═══ 2b. Без привязки — обычная логика ═══ */
+      if(guideDrag.mode === 'slide'){
+        var dxm = w.x - guideDrag.startW.x;
+        var dym = w.y - guideDrag.startW.y;
+        var newPos;
+        if(guideDrag.kind === 'h'){
+          newPos = guideDrag.origPos - dym;
+        } else {
+          newPos = guideDrag.origPos + dxm;
+        }
+        if(grid.snap && grid.size > 0){
+          newPos = Math.round(newPos / grid.size) * grid.size;
+        }
+        gd.pos = newPos;
+      } else {
+        var vxF = w.x - guideDrag.anchor.x;
+        var vyF = w.y - guideDrag.anchor.y;
+        if(Math.hypot(vxF, vyF) > worldTol(6)){
+          var betaF;
+          if(guideDrag.kind === 'h') betaF = Math.atan2(-vyF, vxF);
+          else betaF = Math.atan2(-vxF, -vyF);
+          gd.angle = betaF * 180 / Math.PI;
+        }
+      }
+      /* Ghost = проекция курсора на обновлённую направляющую */
+      var pdNew = guideAnchorAndDir(gd);
+      var P0n = pdNew.P0, Dn = pdNew.D;
+      var tN = (w.x - P0n.x) * Dn.x + (w.y - P0n.y) * Dn.y;
+      guideDrag.curW = { x: P0n.x + Dn.x * tN, y: P0n.y + Dn.y * tN };
+    }
 
     renderGuides();
     renderOverlay();
