@@ -8116,25 +8116,40 @@ if(guideDrag){
     var dxm = w.x - guideDrag.startW.x;
     var dym = w.y - guideDrag.startW.y;
 
-    if(guideDrag.mode === 'slide'){
-      /* Параллельный сдвиг:
-         для h направляющей — по Y, для v — по X.
-         Если включена сетка — округляем новый pos к её шагу. */
+        if(guideDrag.mode === 'slide'){
+      /* ═══ Параллельный сдвиг ═══
+         Приоритет привязок: OSNAP → сетка.
+         • OSNAP: если рядом есть endpoint/midpoint/center/intersection
+           другого объекта, берём точку оттуда.
+         • Сетка: как fallback, если OSNAP ничего не нашёл. */
+      var useW = w;
+      var snappedPt = null;
+      if(typeof osnap !== 'undefined' && osnap.on){
+        snappedPt = snapToObjects(w, null);   /* обновляет lastSnap → маркер */
+        if(snappedPt) useW = snappedPt;
+      }
       var newPos;
       if(guideDrag.kind === 'h'){
-        newPos = guideDrag.origPos - dym;
+        newPos = guideDrag.origPos - (useW.y - guideDrag.startW.y);
       } else {
-        newPos = guideDrag.origPos + dxm;
+        newPos = guideDrag.origPos + (useW.x - guideDrag.startW.x);
       }
-      if(grid.snap && grid.size > 0){
+      if(!snappedPt && grid.snap && grid.size > 0){
         newPos = Math.round(newPos / grid.size) * grid.size;
       }
       gd.pos = newPos;
     } else {
-      /* Свободный поворот: направление указывает из anchor в курсор.
-         Длину игнорируем, важен только угол. */
-      var vx = w.x - guideDrag.anchor.x;
-      var vy = w.y - guideDrag.anchor.y;
+      /* ═══ Свободный поворот (Shift) ═══
+         Приоритет привязок: OSNAP → свободный угол.
+         Если пользователь навёл курсор на OSNAP-точку, направляющая
+         развернётся так, чтобы пройти ТОЧНО через неё. */
+      var useWR = w;
+      if(typeof osnap !== 'undefined' && osnap.on){
+        var snappedRot = snapToObjects(w, null);
+        if(snappedRot) useWR = snappedRot;
+      }
+      var vx = useWR.x - guideDrag.anchor.x;
+      var vy = useWR.y - guideDrag.anchor.y;
       if(Math.hypot(vx, vy) > worldTol(6)){
         var beta;
         if(guideDrag.kind === 'h'){
