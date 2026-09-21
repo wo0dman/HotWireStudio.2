@@ -8150,7 +8150,7 @@ if(guideDrag){
       }
       var vx = useWR.x - guideDrag.anchor.x;
       var vy = useWR.y - guideDrag.anchor.y;
-      if(Math.hypot(vx, vy) > worldTol(6)){
+            if(Math.hypot(vx, vy) > worldTol(6)){
         var beta;
         if(guideDrag.kind === 'h'){
           beta = Math.atan2(-vy, vx);
@@ -8160,6 +8160,21 @@ if(guideDrag){
         gd.angle = beta * 180 / Math.PI;
       }
     }
+
+    /* ═══ Ghost-кружок: проекция курсора на направляющую ═══
+       Раньше ghost ехал за курсором напрямую — на наклонных направляющих
+       он отрывался от линии. Теперь проецируем курсор на текущую
+       направляющую: ghost всегда лежит на ней, скользя вдоль. */
+    var pdCur = guideAnchorAndDir(gd);
+    var Dcur = pdCur.D;
+    var P0cur = pdCur.P0;
+    var ux = w.x - P0cur.x;
+    var uy = w.y - P0cur.y;
+    var tProj = ux * Dcur.x + uy * Dcur.y;   /* D — единичный вектор */
+    var projX = P0cur.x + Dcur.x * tProj;
+    var projY = P0cur.y + Dcur.y * tProj;
+    guideDrag.curW = {x: projX, y: projY};
+
     renderGuides();
     renderOverlay();
   }
