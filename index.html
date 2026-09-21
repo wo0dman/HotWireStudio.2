@@ -1945,19 +1945,51 @@ function offsetClosed(pts, d, opts){
 /* ═══════════════ OFFSET v2: ПРАВИЛЬНЫЕ СОЕДИНЕНИЯ + УДАЛЕНИЕ ПЕТЕЛЬ ═══════════════ */
 
 /* Угловое соединение между offset-концами двух смежных сегментов.
+
    A — offset-конец входящего сегмента,
    B — offset-начало исходящего сегмента,
    vertex — оригинальная вершина,
    d — знаковое смещение (>0 = наружу),
-   inDir/outDir — единичные направления сегментов.
-   Возвращает массив точек в порядке обхода. */
-function offsetJoint(A, B, vertex, d, inDir, outDir, jointType, miterLimit){
+   inDir/outDir — единичные направления сегментов,
+   jointType — 'miter' | 'round' | 'bevel',
+   miterLimit — множитель,
+   isCCW — направление обхода исходного контура.
+
+   Возвращает массив точек в порядке обхода.
+
+   Логика:
+   • Выпуклая вершина (offset-сегменты расходятся) — применяем
+     выбранный тип соединения (miter / round / bevel).
+   • Вогнутая вершина (offset-сегменты сходятся) — ГАРАНТИРОВАННО
+     используем miter. Round и bevel на вогнутых дают внутреннюю петлю
+     и «выворачивают» контур внутрь — это геометрически некорректно. */
+function offsetJoint(A, B, vertex, d, inDir, outDir, jointType, miterLimit, isCCW){
   var distAB = Math.hypot(B.x - A.x, B.y - A.y);
   if(distAB < 1e-7) return [A];
+
+  /* Определяем выпуклость вершины относительно направления offset.
+     cross > 0 при CCW и d > 0 = поворот влево = выпуклая.
+     Учитываем знак d (наружу/внутрь) и ориентацию обхода (CCW/CW). */
+  var cross = inDir.x * outDir.y - inDir.y * outDir.x;
+  var sgn   = isCCW ? 1 : -1;
+  var isConvex = (cross * sgn * d) > 0;
+
+  if(!isConvex){
+    /* Вогнутая вершина — единственно верное решение: miter.
+       При слишком длинном «шипе» откатываемся к bevel, как и раньше. */
+    var ipV = lineInter(A, {x:A.x + inDir.x,  y:A.y + inDir.y},
+                        B, {x:B.x + outDir.x, y:B.y + outDir.y});
+    if(!ipV) return [A, B];
+    var miterDistV = Math.hypot(ipV.x - vertex.x, ipV.y - vertex.y);
+    var limitV = Math.abs(d) * ((miterLimit > 0) ? miterLimit : 2);
+    if(miterDistV <= limitV * 2.5) return [A, ipV, B];
+    return [A, B];
+  }
+
+  /* Дальше — стандартная обработка выпуклых вершин. */
   if(jointType === 'bevel') return [A, B];
 
-  /* Пересечение продолжений offset-сегментов = точка miter. */
-  var ip = lineInter(A, {x:A.x + inDir.x, y:A.y + inDir.y},
+  var ip = lineInter(A, {x:A.x + inDir.x,  y:A.y + inDir.y},
                      B, {x:B.x + outDir.x, y:B.y + outDir.y});
   if(!ip) return [A, B];
 
@@ -1966,7 +1998,7 @@ function offsetJoint(A, B, vertex, d, inDir, outDir, jointType, miterLimit){
 
   if(jointType === 'miter'){
     if(miterDist <= limit) return [A, ip, B];
-    return [A, B];                        /* miter слишком длинный — откат к bevel */
+    return [A, B];
   }
 
   if(jointType === 'round'){
@@ -1974,8 +2006,6 @@ function offsetJoint(A, B, vertex, d, inDir, outDir, jointType, miterLimit){
     var aA = Math.atan2(A.y - vertex.y, A.x - vertex.x);
     var aB = Math.atan2(B.y - vertex.y, B.x - vertex.x);
     var sweep = aB - aA;
-    /* Берём короткую дугу (|sweep| ≤ π) — она всегда лежит с внешней стороны
-       и для выпуклых, и для вогнутых углов. */
     while(sweep >  Math.PI) sweep -= 2*Math.PI;
     while(sweep < -Math.PI) sweep += 2*Math.PI;
     var steps = Math.max(2, Math.ceil(Math.abs(sweep) / (Math.PI/10)));
@@ -2020,7 +2050,12 @@ function findSelfIntersection(pts){
 }
 
 /* Удаление петель: пока находим самопересечения, делим контур на две петли
-   и оставляем ту, у которой знак площади совпадает с исходным. */
+   и оставляем ту, у которой знак площади совпадает с исходным.
+
+   ВАЖНО: точка пересечения сегментов становится УЗЛОМ обеих петель.
+   Именно она является «угловой» вершиной, где контур разрезается и
+   сшивается заново. Без этого вершина терялась и получался «рваный»
+   угол, не совпадающий с фактическим самопересечением. */
 function removeOffsetLoops(pts){
   var sign0 = Math.sign(polyArea(pts)) || 1;
   var result = pts.slice();
@@ -2028,16 +2063,39 @@ function removeOffsetLoops(pts){
   while(guard++ < 100){
     var inter = findSelfIntersection(result);
     if(!inter) break;
+
     var n = result.length;
-    var loopA = [], loopB = [];
-    for(var k = inter.i + 1; k <= inter.j; k++)      loopA.push(result[k % n]);
-    for(var k = inter.j + 1; k <= inter.i + n; k++)  loopB.push(result[k % n]);
+    var i = inter.i, j = inter.j;
+    var P = inter.pt;              /* фактическая точка пересечения */
+
+    /* Считаем количество вершин в каждой петле.
+       Петля A идёт «вперёд» от вершины pts[i+1] до pts[j] — это может быть
+       как прямой диапазон (i<j), так и заворот через конец массива (i>j). */
+    var countA = (i < j) ? (j - i) : (j - i + n);
+    var countB = n - countA;
+
+    /* Петля A: P → pts[i+1] → pts[i+2] → … → pts[j]
+       Замыкается обратно на P — это и есть «правильный срез». */
+    var loopA = [P];
+    for(var k = 0; k < countA; k++){
+      loopA.push(result[(i + 1 + k) % n]);
+    }
+
+    /* Петля B: P → pts[j+1] → … → pts[i]  (всё оставшееся) */
+    var loopB = [P];
+    for(var k = 0; k < countB; k++){
+      loopB.push(result[(j + 1 + k) % n]);
+    }
+
     var sA = polyArea(loopA), sB = polyArea(loopB);
     if(Math.sign(sA) === sign0)      result = loopA;
     else if(Math.sign(sB) === sign0) result = loopB;
-    else break;                             /* оба знака «неправильные» — прерываемся */
+    else break;
   }
-  return result;
+
+  /* Финальная зачистка: если P совпал с соседней вершиной (бывает на
+     касательных пересечениях) — убираем дубли. */
+  return dedupe(result);
 }
 
 /* Основной алгоритм корректного offset замкнутого полигона.
@@ -2090,7 +2148,7 @@ function offsetClosedProper(pts, dSigned, jointType, miterLimit, removeLoops){
     var A = {x: p1.x + nIn.x,  y: p1.y + nIn.y};
     var B = {x: p1.x + nOut.x, y: p1.y + nOut.y};
 
-    var joint = offsetJoint(A, B, p1, dSigned, inDir, outDir, jointType, miterLimit);
+        var joint = offsetJoint(A, B, p1, dSigned, inDir, outDir, jointType, miterLimit, ccw);
     for(var j=0; j<joint.length; j++){
       var pt = joint[j];
       if(result.length &&
