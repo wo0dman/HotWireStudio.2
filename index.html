@@ -1398,7 +1398,7 @@ button.chip:hover{background:var(--fill)}
 </div>
 <div class="hsec"><div class="hsec-t">Выбор и навигация</div>
 <div class="hrow"><span class="hk">V</span><span class="hd"><b>Выбор</b> · Ctrl+клик — перебор объектов · Shift+клик — добавить/убрать.</span></div>
-<div class="hrow"><span class="hk">⇧+drag</span><span class="hd"><b>Ограничение движения</b> — при перетаскивании с Shift объект двигается строго по горизонтали или вертикали. Направление выбирается автоматически по доминирующей оси.</span></div>
+<div class="hrow"><span class="hk">направл.</span><span class="hd"><b>Перетаскивание направляющей</b> — тянем за синий кружок: обычный drag = параллельный сдвиг, <b>Shift+drag</b> = свободный поворот вокруг якоря. Двойной клик по кружку — редактирование в диалоге.</span></div>
 <div class="hrow"><span class="hk">рамка</span><span class="hd">Слева направо — полное вхождение (синяя); справа налево — пересечение (красная).</span></div>
 <div class="hrow"><span class="hk">H / Пробел</span><span class="hd"><b>Рука</b> — панорамирование; средняя кнопка мыши — тоже.</span></div>
 <div class="hrow"><span class="hk">колесо</span><span class="hd">Масштаб к курсору · клик по % — 1:1 · 0 — показать всё.</span></div>
@@ -1632,6 +1632,9 @@ var lastSnap = null;      /* {x,y,type,name} — что привязали (дл
 var guides = [];         /* [{id, kind:'h'|'v', pos:number, angle:number}] */
 var guideSeq = 0;
 var guideDialogState = null;   /* {mode:'create'|'edit', kind:'h'|'v', id?} */
+/* Перетаскивание направляющей за кружок.
+   {id, kind, mode:'slide'|'rotate', startW, origPos, origAngle, anchor, moved, curW} */
+var guideDrag = null;
 var moveStep=1;
 var pen=null, shapeDraft=null, drag=null, marq=null;
 var polySet={sides:6, rot:0, r:50};
@@ -5919,6 +5922,18 @@ function guideHandleAtWorld(w){
 function renderOverlay(){
 var s=viewScaleEff(), px=function(v){return v/s;};
 var h='';
+
+/* ═══ Ghost во время перетаскивания направляющей ═══
+   Настоящий кружок «живёт» у края холста и туда не убегает.
+   Показываем его «призрак» прямо под курсором — чтобы было видно,
+   что направляющую сейчас тянут. */
+if(guideDrag && guideDrag.curW){
+  var sGD = viewScaleEff();
+  h += '<circle cx="'+guideDrag.curW.x+'" cy="'+guideDrag.curW.y+'" r="'+(9/sGD)+'"'
+     + ' fill="rgba(0,122,255,.32)" stroke="#007AFF" stroke-width="2"'
+     + ' vector-effect="non-scaling-stroke" pointer-events="none"/>';
+}
+
 /* ═══ OSNAP: маркер найденной точки ═══ */
 if(lastSnap && osnap.on && !solidMode()){
   var sO = viewScaleEff();
@@ -7766,6 +7781,31 @@ showCtx(e.clientX,e.clientY,w);
 return;
 }
 if(e.button!==0) return;
+
+/* ═══ Перетаскивание направляющей за кружок ═══
+   Приоритет над обычной обработкой — кружок является "ручкой".
+   Работает только в режиме выбора, чтобы не мешать другим инструментам.
+   Без Shift = параллельный сдвиг, с Shift = поворот вокруг якоря. */
+if(tool === 'select'){
+  var ghDrag = guideHandleAtWorld(w);
+  if(ghDrag){
+    var aP = guideAnchorAndDir(ghDrag).P0;
+    guideDrag = {
+      id: ghDrag.id,
+      kind: ghDrag.kind,
+      mode: e.shiftKey ? 'rotate' : 'slide',
+      startW: {x: w.x, y: w.y},
+      origPos: ghDrag.pos,
+      origAngle: ghDrag.angle,
+      anchor: {x: aP.x, y: aP.y},
+      curW: {x: w.x, y: w.y},
+      moved: false
+    };
+    e.preventDefault();
+    return;
+  }
+}
+
 var wSnap=snapAll(w,null);
 if(tool==='knife'){
 var cut=knifeFindCut(w);
@@ -8062,6 +8102,55 @@ renderOverlay(); return;
 stage.addEventListener('pointermove',function(e){
 var w=toWorld(e);
 $('#stCoord').innerHTML='X '+w.x.toFixed(2)+'&ensp;Y <b>'+(-w.y).toFixed(2)+'</b>&ensp;↑';
+
+/* ═══ Перетаскивание направляющей ═══
+   slide  — сдвиг по перпендикуляру (без Shift);
+   rotate — поворот вокруг anchor-точки (с Shift). */
+if(guideDrag){
+  var gd = null;
+  for(var gi = 0; gi < guides.length; gi++) if(guides[gi].id === guideDrag.id){ gd = guides[gi]; break; }
+  if(!gd){ guideDrag = null; }
+  else {
+    if(!guideDrag.moved) guideDrag.moved = true;
+    guideDrag.curW = {x: w.x, y: w.y};
+    var dxm = w.x - guideDrag.startW.x;
+    var dym = w.y - guideDrag.startW.y;
+
+    if(guideDrag.mode === 'slide'){
+      /* Параллельный сдвиг:
+         для h направляющей — по Y, для v — по X.
+         Если включена сетка — округляем новый pos к её шагу. */
+      var newPos;
+      if(guideDrag.kind === 'h'){
+        newPos = guideDrag.origPos - dym;
+      } else {
+        newPos = guideDrag.origPos + dxm;
+      }
+      if(grid.snap && grid.size > 0){
+        newPos = Math.round(newPos / grid.size) * grid.size;
+      }
+      gd.pos = newPos;
+    } else {
+      /* Свободный поворот: направление указывает из anchor в курсор.
+         Длину игнорируем, важен только угол. */
+      var vx = w.x - guideDrag.anchor.x;
+      var vy = w.y - guideDrag.anchor.y;
+      if(Math.hypot(vx, vy) > worldTol(6)){
+        var beta;
+        if(guideDrag.kind === 'h'){
+          beta = Math.atan2(-vy, vx);
+        } else {
+          beta = Math.atan2(-vx, -vy);
+        }
+        gd.angle = beta * 180 / Math.PI;
+      }
+    }
+    renderGuides();
+    renderOverlay();
+  }
+  return;
+}
+
 /* OSNAP: обновляем маркер при движении без активного перетаскивания. */
 if(!drag && osnap.on && tool !== 'hand' && !spaceDown){
   var snapWas = lastSnap;
@@ -8288,6 +8377,18 @@ var renderPropsDebounced=debounce(function(){renderProps();},150);
 stage.addEventListener('pointerup',function(e){
 wrap.classList.remove('panning');
 var w=toWorld(e);
+
+/* ═══ Завершение перетаскивания направляющей ═══ */
+if(guideDrag){
+  if(guideDrag.moved){
+    renderGuides();
+    renderOverlay();
+    scheduleSave();
+  }
+  guideDrag = null;
+  return;
+}
+
 if(drag){
 if(drag.mode==='draft'&&shapeDraft){
 var d=shapeDraft, x=Math.min(d.x0,d.x1), y=Math.min(d.y0,d.y1),
@@ -8401,6 +8502,7 @@ document.addEventListener('contextmenu', function(e){
 });
 stage.addEventListener('pointerleave',function(){
   if(lastSnap){ lastSnap = null; renderOverlay(); }
+  if(guideDrag){ guideDrag = null; renderOverlay(); }
 });
 function hasPendingState(){
 return !!(pen||shapeDraft||polyDraft||arcDraft||joinState||(ruler.pts.length||ruler.info)||knife.a);
