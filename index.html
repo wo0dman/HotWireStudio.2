@@ -1358,7 +1358,11 @@ button.chip:hover{background:var(--fill)}
       <span style="flex:1">Ближайшие</span>
       <span class="sw"><input type="checkbox" data-os="nearest"><i></i></span>
     </label>
-    <div class="osnap-sep"></div>
+        <div class="osnap-sep"></div>
+    <label class="osnap-row">
+      <span style="flex:1">Значки и подписи</span>
+      <span class="sw"><input type="checkbox" id="osnapShowMarks"><i></i></span>
+    </label>
     <label class="osnap-row" style="cursor:default">
       <span style="flex:1">Радиус захвата, px</span>
       <input type="number" id="osnapTol" min="4" max="40" step="1" value="12" class="pop-num">
@@ -1624,7 +1628,8 @@ var osnap = {
   perpendicular: false,
   tangent: false,
   nearest: false,
-  tolPx: 12
+  tolPx: 12,
+  showMarks: true         /* показывать значки и надписи привязок */
 };
 var osnapRef = null;      /* {x,y} — «откуда» для perpendicular/tangent */
 var lastSnap = null;      /* {x,y,type,name} — что привязали (для маркера) */
@@ -5934,8 +5939,10 @@ if(guideDrag && guideDrag.curW){
      + ' vector-effect="non-scaling-stroke" pointer-events="none"/>';
 }
 
-/* ═══ OSNAP: маркер найденной точки ═══ */
-if(lastSnap && osnap.on && !solidMode()){
+/* ═══ OSNAP: маркер найденной точки ═══
+   Показываем только если не выключен тумблером «Значки и подписи».
+   Сама привязка продолжает работать. */
+if(lastSnap && osnap.on && osnap.showMarks !== false && !solidMode()){
   var sO = viewScaleEff();
   var R = 8 / sO;
   var col = '#00B34A';                 /* зелёный, как в AutoCAD */
@@ -9735,7 +9742,8 @@ function osnapSaveCfg(){
     perpendicular: osnap.perpendicular,
     tangent: osnap.tangent,
     nearest: osnap.nearest,
-    tolPx: osnap.tolPx
+    tolPx: osnap.tolPx,
+    showMarks: osnap.showMarks
   };
 }
 
@@ -9747,6 +9755,8 @@ function osnapLoadCfg(o){
     if(o[k] !== undefined) osnap[k] = !!o[k];
   });
   if(+o.tolPx > 0) osnap.tolPx = clamp(+o.tolPx, 4, 60);
+  /* Показ значков: по умолчанию включён, если не задан */
+  osnap.showMarks = (o.showMarks === undefined) ? true : !!o.showMarks;
   /* Обновить UI */
   var master = $('#osnapMaster');
   if(master) master.checked = osnap.on;
@@ -9758,6 +9768,8 @@ function osnapLoadCfg(o){
   }
   var ti = $('#osnapTol');
   if(ti) ti.value = osnap.tolPx;
+  var mc = $('#osnapShowMarks');
+  if(mc) mc.checked = osnap.showMarks;
   updateOsnapChip();
 }
 
@@ -9796,7 +9808,18 @@ function bindOsnapUI(){
       else tolInp.value = osnap.tolPx;
     };
   }
-
+  /* Показывать значки и подписи привязок */
+  var marksCb = $('#osnapShowMarks');
+  if(marksCb){
+    marksCb.checked = osnap.showMarks !== false;
+    marksCb.onchange = function(){
+      osnap.showMarks = !!marksCb.checked;
+      /* Если скрываем — сразу гасим маркер, чтобы не висел */
+      if(!osnap.showMarks){ lastSnap = null; }
+      renderOverlay();
+      scheduleSave();
+    };
+  }
   chip.onclick = function(e){
     e.stopPropagation();
     pop.classList.toggle('show');
