@@ -1414,7 +1414,7 @@ button.chip:hover{background:var(--fill)}
 </div>
 <div class="hsec"><div class="hsec-t">Редактирование формы</div>
 <div class="hrow"><span class="hk">A</span><span class="hd"><b>Узлы</b> · 2×клик по узлу — сгладить/острый · по сегменту — добавить узел · Alt ломает симметрию ручек.</span></div>
-<div class="hrow"><span class="hk">D</span><span class="hd"><b>Удалить сегмент</b>.</span></div>
+<div class="hrow"><span class="hk">D</span><span class="hd"><b>Ножницы</b> · режим «Сегмент» — удаляет сегмент между соседними узлами · режим «Обрезка» — удаляет участок до ближайших пересечений с другими контурами или направляющими. Если пересечений нет — работает как сегмент.</span></div>
 <div class="hrow"><span class="hk">J</span><span class="hd"><b>Смыкание векторов</b>.</span></div>
 <div class="hrow"><span class="hk">K</span><span class="hd"><b>Нож</b> — разрез и соединение двух замкнутых фигур мостиком.</span></div>
 <div class="hrow"><span class="hk">S</span><span class="hd"><b>Начальная точка</b> реза.</span></div>
@@ -1642,6 +1642,8 @@ var guideDialogState = null;   /* {mode:'create'|'edit', kind:'h'|'v', id?} */
 var guideDrag = null;
 var moveStep=1;
 var pen=null, shapeDraft=null, drag=null, marq=null;
+/* ─── Режим ножниц ─── */
+var eraserMode = 'segment';    /* 'segment' | 'trim' */
 var polySet={sides:6, rot:0, r:50};
 var polyDraft=null;
 /* ─── Настройки отступа (offset v2) ─── */
@@ -4926,7 +4928,7 @@ function projCollectData(){
     iso:iso, showNumbers:showNumbers, moveStep:moveStep,
     iso3D:iso3D, isoThickness:isoThickness, polySet:polySet,
     workArea:workArea, nestCfg:nestSaveCfg(), offsetCfg:offsetState,
-    osnapCfg:osnapSaveCfg(), guides:guides
+    osnapCfg:osnapSaveCfg(), guides:guides, eraserMode:eraserMode
   };
 }
 function projApplyData(data){
@@ -4970,6 +4972,9 @@ function projApplyData(data){
     ? data.guides.filter(function(g){ return g && (g.kind==='h'||g.kind==='v') && isFinite(+g.pos); })
         .map(function(g){ return {id:g.id||('g'+(++guideSeq)+'_'+uid()), kind:g.kind, pos:+g.pos||0, angle:+g.angle||0}; })
     : [];
+      if(data.eraserMode === 'trim' || data.eraserMode === 'segment'){
+    eraserMode = data.eraserMode;
+  }
   selection = []; nodeSel.clear();
   syncCamInputs(); updateToolpathBtn(); updateNumbersBtn();
   updateViewToggles(); updateViewSeg(); updateIsoUI(); updateStatusChips();
@@ -6859,7 +6864,22 @@ var diagR=Math.hypot(b.w,b.h);
 extra+='<div class="card" id="rulerCard"><div class="card-h">Измерения объекта</div><div class="hint" style="padding-top:6px">'+
 'Ширина: <b>'+fmtLen(b.w)+'</b><br>Высота: <b>'+fmtLen(b.h)+'</b><br>Диагональ габарита: <b>'+fmtLen(diagR)+'</b><br>Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b></div></div>';
 }
-
+if(tool==='eraser'){
+  var isSeg = eraserMode === 'segment';
+  var isTrim = eraserMode === 'trim';
+  extra += '<div class="card" id="eraserCard"><div class="card-h">Ножницы</div>';
+  extra += '<div class="fld"><label>Режим работы</label>'
+        +  '<div class="calc-seg" id="eraserModeSeg">'
+        +    '<button data-v="segment"'+(isSeg?' class="on"':'')+'>Сегмент</button>'
+        +    '<button data-v="trim"'+(isTrim?' class="on"':'')+'>Обрезка</button>'
+        +  '</div></div>';
+  extra += '<div class="hint">'
+        +  (isSeg
+            ? '<b>Сегмент</b> — клик по линии удаляет её между соседними узлами.'
+            : '<b>Обрезка</b> — клик по линии удаляет участок до ближайших пересечений с другими контурами или направляющими. Если пересечений нет — работает как обычное удаление сегмента.')
+        +  '</div>';
+  extra += '</div>';
+}
 if(tool==='knife'){
 extra+='<div class="card" id="knifeCard"><div class="card-h">Инструмент «Нож»</div><div class="hint" style="padding-top:6px">'+
 'Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b><br>Точек: <b>'+o.points.length+'</b> · Замкнут: <b>'+(o.closed?'да':'нет')+'</b></div>'+
@@ -6998,6 +7018,16 @@ if(tool==='array'){
 
   var apb = $('#arrApplyBtn');
   if(apb) apb.onclick = arrayApply;
+}
+if(tool==='eraser'){
+  var segE = $('#eraserModeSeg');
+  if(segE) segE.onclick = function(e){
+    var btn = e.target.closest('button[data-v]');
+    if(!btn) return;
+    eraserMode = btn.dataset.v;
+    renderProps();
+    scheduleSave();
+  };
 }
 }
 function renderProps(){ renderPropsInner(); bindPolyCard(); }
@@ -7586,6 +7616,248 @@ objects.splice.apply(objects,[insertIdx,0].concat(block));
 }
 afterChange(); toast('Порядок слоёв (и резки) изменён','check');
 }
+/* ═══════════════ ОБРЕЗКА ПО ПЕРЕСЕЧЕНИЯМ (Ножницы: режим trim) ═══════════════ */
+
+/* Строит параметризацию контура: полилиния (с упрощением кривых)
+   + накопленные длины сегментов. Возвращает null при ошибке. */
+function buildContourParam(o){
+  var poly = objectToPoly(o, 0.1);
+  if(!poly || !poly.pts || poly.pts.length < 2) return null;
+  var pts = poly.pts.slice();
+  if(poly.closed && pts.length > 2 && dist(pts[0], pts[pts.length-1]) < 1e-6){
+    pts.pop();
+  }
+  var n = pts.length;
+  var lens = [0], total = 0;
+  var lim = poly.closed ? n : n - 1;
+  for(var i = 0; i < lim; i++){
+    var a = pts[i], b = pts[(i+1) % n];
+    total += dist(a, b);
+    lens.push(total);
+  }
+  return {pts: pts, closed: !!poly.closed, lens: lens, total: total};
+}
+
+/* Возвращает точку на полилинии по длине дуги от начала. */
+function pointAtArcLen(param, len){
+  var pts = param.pts, n = pts.length;
+  var lens = param.lens;
+  if(len <= 1e-9) return {x: pts[0].x, y: pts[0].y};
+  if(len >= param.total - 1e-9) return {x: pts[param.closed ? 0 : n-1].x, y: pts[param.closed ? 0 : n-1].y};
+  for(var i = 0; i < lens.length - 1; i++){
+    if(len <= lens[i+1] + 1e-9){
+      var segLen = lens[i+1] - lens[i];
+      var t = segLen > 1e-12 ? (len - lens[i]) / segLen : 0;
+      var a = pts[i], b = pts[(i+1) % n];
+      return {x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t};
+    }
+  }
+  return {x: pts[n-1].x, y: pts[n-1].y};
+}
+
+/* По точке на плоскости возвращает длину вдоль контура (параметр arcLen)
+   для ближайшей точки контура. */
+function arcLenAtPoint(param, pt){
+  var pts = param.pts, n = pts.length;
+  var lim = param.closed ? n : n - 1;
+  var bestD = Infinity, bestLen = 0;
+  for(var i = 0; i < lim; i++){
+    var a = pts[i], b = pts[(i+1) % n];
+    var dx = b.x - a.x, dy = b.y - a.y;
+    var l2 = dx*dx + dy*dy;
+    var t = l2 > 1e-12 ? clamp(((pt.x - a.x) * dx + (pt.y - a.y) * dy) / l2, 0, 1) : 0;
+    var px = a.x + dx*t, py = a.y + dy*t;
+    var d = Math.hypot(pt.x - px, pt.y - py);
+    if(d < bestD){
+      bestD = d;
+      bestLen = param.lens[i] + (param.lens[i+1] - param.lens[i]) * t;
+    }
+  }
+  return bestLen;
+}
+
+/* Ищет все пересечения контура o с другими объектами и с направляющими.
+   Возвращает отсортированный по длине дуги массив {arcLen, x, y}. */
+function findContourIntersections(o, param){
+  var pts = param.pts, n = pts.length, closed = param.closed;
+  var lim = closed ? n : n - 1;
+  var out = [];
+
+  function pushIntersection(a, b, c, d, i){
+    var ip = lineInter(a, b, c, d);
+    if(!ip) return;
+    if(!osnapPointOnSeg(ip, a, b)) return;
+    if(!osnapPointOnSeg(ip, c, d)) return;
+    var segLen = param.lens[i+1] - param.lens[i];
+    var t = segLen > 1e-12 ? dist(a, ip) / segLen : 0;
+    var arcLen = param.lens[i] + segLen * t;
+    out.push({arcLen: arcLen, x: ip.x, y: ip.y});
+  }
+
+  /* 1) С другими видимыми объектами */
+  for(var k = 0; k < objects.length; k++){
+    var other = objects[k];
+    if(other === o) continue;
+    if(other.type === 'group' || !isObjectVisible(other)) continue;
+    var op = objectToPoly(other, 0.2);
+    if(!op || !op.pts) continue;
+    var opt = op.pts, optN = opt.length;
+    var optLim = op.closed ? optN : optN - 1;
+    for(var i = 0; i < lim; i++){
+      var a = pts[i], b = pts[(i+1) % n];
+      for(var j = 0; j < optLim; j++){
+        pushIntersection(a, b, opt[j], opt[(j+1) % optN], i);
+      }
+    }
+  }
+
+  /* 2) С направляющими (бесконечные прямые) */
+  for(var g = 0; g < guides.length; g++){
+    var pd = guideAnchorAndDir(guides[g]);
+    var span = 1e5;
+    var la = {x: pd.P0.x + pd.D.x * span, y: pd.P0.y + pd.D.y * span};
+    var lb = {x: pd.P0.x - pd.D.x * span, y: pd.P0.y - pd.D.y * span};
+    for(var i2 = 0; i2 < lim; i2++){
+      var a2 = pts[i2], b2 = pts[(i2+1) % n];
+      pushIntersection(a2, b2, la, lb, i2);
+    }
+  }
+
+  /* Сортировка по длине дуги + удаление почти совпадающих */
+  out.sort(function(p, q){ return p.arcLen - q.arcLen; });
+  var dedup = [];
+  for(var d2 = 0; d2 < out.length; d2++){
+    if(!dedup.length || Math.abs(dedup[dedup.length-1].arcLen - out[d2].arcLen) > 0.05){
+      dedup.push(out[d2]);
+    }
+  }
+  return dedup;
+}
+
+/* Собирает точки контура между двумя длинами дуги (from → to).
+   Включает в результат все узлы и границы. */
+function collectRange(param, from, to){
+  var pts = param.pts, n = pts.length, closed = param.closed;
+  var lens = param.lens;
+  var res = [];
+  var pStart = pointAtArcLen(param, from);
+  res.push({x: pStart.x, y: pStart.y});
+  /* Проходим по всем узлам, чья длина в диапазоне */
+  var lim = closed ? n : n - 1;
+  for(var i = 0; i < lim; i++){
+    var L = lens[i];
+    if(L > from + 1e-6 && L < to - 1e-6){
+      res.push({x: pts[i].x, y: pts[i].y});
+    }
+  }
+  var pEnd = pointAtArcLen(param, to);
+  var last = res[res.length - 1];
+  if(dist(last, pEnd) > 1e-6) res.push({x: pEnd.x, y: pEnd.y});
+  return res;
+}
+
+/* Разбивает контур, исключая участок [from, to].
+   Возвращает массив контуров: [{pts, closed}, ...]. */
+function splitContourByRange(param, from, to){
+  var total = param.total;
+  var closed = param.closed;
+
+  if(closed){
+    /* Замкнутый: всегда один оставшийся контур. Если удалили всё — пусто.
+       Из «to» идём через конец массива в «from». */
+    if((to - from) < 1e-6) return [];
+    if((to - from) >= total - 1e-6) return [];
+    var part = [];
+    var pStart = pointAtArcLen(param, to);
+    part.push({x: pStart.x, y: pStart.y});
+    var n = param.pts.length;
+    var lens = param.lens;
+    for(var i = 0; i < n; i++){
+      var L = lens[i];
+      /* Узел в диапазоне [to, total] ∪ [0, from] */
+      var inRange = (L >= to - 1e-6) || (L <= from + 1e-6);
+      if(inRange && L > to + 1e-6 && L < from + total - 1e-6){
+        part.push({x: param.pts[i].x, y: param.pts[i].y});
+      }
+    }
+    var pEnd = pointAtArcLen(param, from);
+    if(dist(part[part.length-1], pEnd) > 1e-6) part.push({x: pEnd.x, y: pEnd.y});
+    return [{pts: part, closed: false}];
+  } else {
+    /* Открытый: возможны 1 или 2 части. */
+    var parts = [];
+    if(from > 1e-6){
+      parts.push({pts: collectRange(param, 0, from), closed: false});
+    }
+    if(to < total - 1e-6){
+      parts.push({pts: collectRange(param, to, total), closed: false});
+    }
+    return parts;
+  }
+}
+
+/* Основная операция: обрезка по клику. */
+function trimContourByClick(hit, worldPt){
+  var o = hit.o;
+  var param = buildContourParam(o);
+  if(!param){ toast('Не удалось прочитать контур'); return false; }
+
+  var clickLen = arcLenAtPoint(param, worldPt);
+  var ints = findContourIntersections(o, param);
+  if(!ints.length){
+    /* Нет пересечений — классическое поведение: удаляем сегмент */
+    return false;
+  }
+
+  /* Ближайшее слева и справа от clickLen */
+  var leftLen = 0, rightLen = param.total;
+  for(var i = 0; i < ints.length; i++){
+    if(ints[i].arcLen < clickLen - 0.05){
+      leftLen = ints[i].arcLen;
+    } else if(ints[i].arcLen > clickLen + 0.05){
+      rightLen = ints[i].arcLen;
+      break;
+    }
+  }
+
+  /* Нечего резать */
+  if(rightLen - leftLen < 0.1){
+    toast('Участок слишком мал');
+    return false;
+  }
+
+  var parts = splitContourByRange(param, leftLen, rightLen);
+  if(!parts.length){
+    toast('Нечего удалять');
+    return false;
+  }
+
+  pushHistory();
+
+  /* Заменяем объект на получившиеся части */
+  var idx = objects.indexOf(o);
+  objects.splice(idx, 1);
+
+  var newObjs = parts.map(function(p, k){
+    var pts = dedupe(p.pts).map(function(q){ return mkPoint(q.x, q.y); });
+    return {
+      id: uid(),
+      name: parts.length > 1 ? (o.name + ' (' + (k+1) + ')') : o.name,
+      closed: !!p.closed,
+      visible: o.visible,
+      cut: o.cut !== false,
+      color: o.color,
+      points: pts
+    };
+  });
+
+  objects.splice.apply(objects, [idx, 0].concat(newObjs));
+  selection = newObjs.map(function(no){ return no.id; });
+  eraserHover = null;
+  afterChange();
+  toast('Обрезано по пересечениям — ' + newObjs.length + ' контур(а)', 'scissors');
+  return true;
+}
 function findSegmentHit(w){
 var tol=worldTol(7);
 for(var i=objects.length-1;i>=0;i--){
@@ -7987,9 +8259,17 @@ afterChange(); return;
 }
 }
 if(tool==='eraser'){
-var hit5=findSegmentHit(w);
-if(hit5) removeSegment(hit5.o,hit5.i);
-return;
+  var hit5 = findSegmentHit(w);
+  if(!hit5) return;
+  if(eraserMode === 'trim'){
+    /* Пробуем обрезать по пересечениям; если не получилось — fallback
+       на классическое удаление сегмента */
+    var trimmed = trimContourByClick(hit5, w);
+    if(!trimmed) removeSegment(hit5.o, hit5.i);
+  } else {
+    removeSegment(hit5.o, hit5.i);
+  }
+  return;
 }
 if(tool==='start'){
 var tol2=worldTol(9);
