@@ -3637,7 +3637,8 @@ function focusToolCard(t){
         offset: 'offsetCard',
         array:  'arrayCard',
         ruler:  'rulerCard',
-        knife:  'knifeCard'
+        knife:  'knifeCard',
+        eraser: 'eraserCard'
     };
     var id = map[t];
     if(!id) return false;
@@ -6253,9 +6254,49 @@ for(var t=0;t<objects.length;t++) if(objects[t].visible&&objects[t].type!=='grou
 if(tool==='eraser'&&eraserHover){
 var eo=findObj(eraserHover.id);
 if(eo&&eo.type!=='group'){
-var n=eo.points.length, ea=eo.points[eraserHover.i], eb=eo.points[(eraserHover.i+1)%n];
-var show=(eo.closed||eraserHover.i<n-1)&&ea&&eb;
-if(show) h+='<path d="'+segD(ea,eb)+'" fill="none" stroke="#FF3B30" stroke-width="3" opacity=".85" vector-effect="non-scaling-stroke"/>';
+  if(eraserMode==='segment'){
+    /* Режим 1: подсветка одного сегмента между узлами */
+    var n=eo.points.length, ea=eo.points[eraserHover.i], eb=eo.points[(eraserHover.i+1)%n];
+    var show=(eo.closed||eraserHover.i<n-1)&&ea&&eb;
+    if(show) h+='<path d="'+segD(ea,eb)+'" fill="none" stroke="#FF3B30" stroke-width="3" opacity=".85" vector-effect="non-scaling-stroke"/>';
+  } else {
+    /* Режимы 2 и 3: подсветка РЕАЛЬНО удаляемого диапазона */
+    var prm = buildContourParam(eo);
+    if(prm && eraserHover.world){
+      var clickLen = arcLenAtPoint(prm, eraserHover.world);
+      var ints = findContourIntersections(eo, prm);
+      if(ints.length){
+        var leftLen=null, rightLen=null;
+        if(eraserMode==='trimOne'){
+          var leftInt=null, rightInt=null;
+          for(var ii=0; ii<ints.length; ii++){
+            if(ints[ii].arcLen < clickLen-0.05) leftInt=ints[ii].arcLen;
+            else if(ints[ii].arcLen > clickLen+0.05){ rightInt=ints[ii].arcLen; break; }
+          }
+          var dL=(leftInt!==null)?(clickLen-leftInt):Infinity;
+          var dR=(rightInt!==null)?(rightInt-clickLen):Infinity;
+          if(dL!==Infinity || dR!==Infinity){
+            if(dL<=dR){ leftLen=leftInt; rightLen=clickLen; }
+            else { leftLen=clickLen; rightLen=rightInt; }
+          }
+        } else {
+          leftLen=0; rightLen=prm.total;
+          for(var jj=0; jj<ints.length; jj++){
+            if(ints[jj].arcLen < clickLen-0.05) leftLen=ints[jj].arcLen;
+            else if(ints[jj].arcLen > clickLen+0.05){ rightLen=ints[jj].arcLen; break; }
+          }
+        }
+        if(leftLen!==null && rightLen!==null && rightLen-leftLen > 0.1){
+          var rangePts = collectRange(prm, leftLen, rightLen);
+          if(rangePts.length > 1){
+            var dd = 'M '+rangePts[0].x+' '+rangePts[0].y;
+            for(var kk=1; kk<rangePts.length; kk++) dd += ' L '+rangePts[kk].x+' '+rangePts[kk].y;
+            h += '<path d="'+dd+'" fill="none" stroke="#FF3B30" stroke-width="3" opacity=".85" vector-effect="non-scaling-stroke"/>';
+          }
+        }
+      }
+    }
+  }
 }
 }
 if(polyDraft){
@@ -6632,6 +6673,41 @@ return '<div class="card" id="polyCard"><div class="card-h"><span>Многоуг
 '</div>'
 
 }
+function eraserCardHTML(){
+  if(tool !== 'eraser') return '';
+  var isSeg = eraserMode === 'segment';
+  var isOne = eraserMode === 'trimOne';
+  var isTwo = eraserMode === 'trimTwo';
+  return '<div class="card" id="eraserCard"><div class="card-h">Ножницы</div>'
+       + '<div class="fld"><label>Режим работы</label>'
+       + '<div class="calc-seg" id="eraserModeSeg">'
+       + '<button data-v="segment"'+(isSeg?' class="on"':'')+'>Сегмент</button>'
+       + '<button data-v="trimOne"'+(isOne?' class="on"':'')+'>До линии</button>'
+       + '<button data-v="trimTwo"'+(isTwo?' class="on"':'')+'>Между линиями</button>'
+       + '</div></div>'
+       + '<div class="hint">'
+       + (isSeg
+          ? '<b>Сегмент</b> — клик по линии удаляет её между соседними узлами (замкнутый контур размыкается, открытый делится надвое).'
+          : isOne
+          ? '<b>До линии</b> — клик по линии удаляет участок от точки клика до <b>ближайшего</b> пересечения с другим контуром или направляющей. Если пересечений нет — работает как «Сегмент».'
+          : '<b>Между линиями</b> — клик по линии удаляет участок <b>между двумя</b> ближайшими пересечениями, охватывающими точку клика. Если пересечений нет — работает как «Сегмент».')
+       + '</div></div>';
+}
+function bindEraserCardUI(){
+  var segE = $('#eraserModeSeg');
+  if(!segE) return;
+  segE.onclick = function(e){
+    var btn = e.target.closest('button[data-v]');
+    if(!btn) return;
+    var v = btn.dataset.v;
+    if(v === 'segment' || v === 'trimOne' || v === 'trimTwo'){
+      eraserMode = v;
+    }
+    renderProps();
+    renderOverlay();
+    scheduleSave();
+  };
+}
 function bindPolyCard(){
 var sEl=$('#polySides');
 if(sEl) sEl.onchange=function(){
@@ -6657,7 +6733,7 @@ function renderPropsInner(){
 var box=$('#propsBox');
 var sel=selected();
 if(!sel.length){
-box.innerHTML=polyCardHTML()+
+box.innerHTML=polyCardHTML()+eraserCardHTML()+
 '<div class="card"><div class="empty-state">'+
 '<div class="es-ic">'+icon('cube',26)+'</div>'+
 '<b>Ничего не выбрано</b>'+
@@ -6868,24 +6944,7 @@ extra+='<div class="card" id="rulerCard"><div class="card-h">Измерения 
 'Ширина: <b>'+fmtLen(b.w)+'</b><br>Высота: <b>'+fmtLen(b.h)+'</b><br>Диагональ габарита: <b>'+fmtLen(diagR)+'</b><br>Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b></div></div>';
 }
 if(tool==='eraser'){
-  var isSeg = eraserMode === 'segment';
-  var isOne = eraserMode === 'trimOne';
-  var isTwo = eraserMode === 'trimTwo';
-  extra += '<div class="card" id="eraserCard"><div class="card-h">Ножницы</div>';
-  extra += '<div class="fld"><label>Режим работы</label>'
-        +  '<div class="calc-seg" id="eraserModeSeg">'
-        +    '<button data-v="segment"'+(isSeg?' class="on"':'')+'>Сегмент</button>'
-        +    '<button data-v="trimOne"'+(isOne?' class="on"':'')+'>До линии</button>'
-        +    '<button data-v="trimTwo"'+(isTwo?' class="on"':'')+'>Между линиями</button>'
-        +  '</div></div>';
-  extra += '<div class="hint">'
-        +  (isSeg
-            ? '<b>Сегмент</b> — клик по линии удаляет её между соседними узлами (замкнутый контур размыкается, открытый делится надвое).'
-            : isOne
-            ? '<b>До линии</b> — клик по линии удаляет участок от точки клика до <b>ближайшего</b> пересечения с другим контуром или направляющей. Если пересечений нет — работает как «Сегмент».'
-            : '<b>Между линиями</b> — клик по линии удаляет участок <b>между двумя</b> ближайшими пересечениями, охватывающими точку клика. Если пересечений нет — работает как «Сегмент».')
-        +  '</div>';
-  extra += '</div>';
+  extra += eraserCardHTML();
 }
 if(tool==='knife'){
 extra+='<div class="card" id="knifeCard"><div class="card-h">Инструмент «Нож»</div><div class="hint" style="padding-top:6px">'+
@@ -7026,23 +7085,9 @@ if(tool==='array'){
   var apb = $('#arrApplyBtn');
   if(apb) apb.onclick = arrayApply;
 }
-if(tool==='eraser'){
-  var segE = $('#eraserModeSeg');
-  if(segE) segE.onclick = function(e){
-    var btn = e.target.closest('button[data-v]');
-    if(!btn) return;
-    var v = btn.dataset.v;
-    if(v === 'segment' || v === 'trimOne' || v === 'trimTwo'){
-      eraserMode = v;
-    }
-    renderProps();
-    renderOverlay();
-    scheduleSave();
-  };
-} };
+bindEraserCardUI();
 }
-
-function renderProps(){ renderPropsInner(); bindPolyCard(); }
+function renderProps(){ renderPropsInner(); bindPolyCard(); bindEraserCardUI(); }
 function transformObjectScale(o,b,sx,sy){
 if(o.type==='group'){ groupChildren(o).forEach(function(c){transformObjectScale(c,b,sx,sy);}); return; }
 if(!o.points) return;
@@ -8595,9 +8640,10 @@ if(tool==='eraser'){
 var h=findSegmentHit(w);
 var key=h?(h.o.id+':'+h.i):null;
 if(key!==(eraserHover?eraserHover.key:null)){
-eraserHover=h?{key:key,id:h.o.id,i:h.i}:null;
+eraserHover=h?{key:key,id:h.o.id,i:h.i,world:{x:w.x,y:w.y}}:null;
 renderOverlay();
 }
+
 } else if(tool==='join'){
 var hj=nearestOpenEndpoint(w,joinState?joinState.id:null);
 var keyJ=hj?(hj.id+':'+hj.idx):null;
@@ -9229,21 +9275,23 @@ if(focusToolCard(t)){
   if(!activeTab || activeTab.dataset.tab !== 'obj'){
     switchTab('obj');
     /* switchTab снимает .hidden с pane-obj, даём layout пересчитаться */
-    setTimeout(function(){ focusCardById(
+        setTimeout(function(){ focusCardById(
       t==='poly'?'polyCard':
       t==='offset'?'offsetCard':
       t==='array'?'arrayCard':
       t==='ruler'?'rulerCard':
-      t==='knife'?'knifeCard':null
+      t==='knife'?'knifeCard':
+      t==='eraser'?'eraserCard':null
     ); }, 80);
   } else {
     /* Уже на нужной вкладке — просто ещё раз фокусируем после анимации вкладки. */
-    setTimeout(function(){ focusCardById(
+        setTimeout(function(){ focusCardById(
       t==='poly'?'polyCard':
       t==='offset'?'offsetCard':
       t==='array'?'arrayCard':
       t==='ruler'?'rulerCard':
-      t==='knife'?'knifeCard':null
+      t==='knife'?'knifeCard':
+      t==='eraser'?'eraserCard':null
     ); }, 40);
   }
 }
