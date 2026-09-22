@@ -1643,7 +1643,7 @@ var guideDrag = null;
 var moveStep=1;
 var pen=null, shapeDraft=null, drag=null, marq=null;
 /* ─── Режим ножниц ─── */
-var eraserMode = 'segment';    /* 'segment' | 'trim' */
+var eraserMode = 'segment';    /* 'segment' | 'trimOne' | 'trimTwo' */
 var polySet={sides:6, rot:0, r:50};
 var polyDraft=null;
 /* ─── Настройки отступа (offset v2) ─── */
@@ -4972,9 +4972,12 @@ function projApplyData(data){
     ? data.guides.filter(function(g){ return g && (g.kind==='h'||g.kind==='v') && isFinite(+g.pos); })
         .map(function(g){ return {id:g.id||('g'+(++guideSeq)+'_'+uid()), kind:g.kind, pos:+g.pos||0, angle:+g.angle||0}; })
     : [];
-      if(data.eraserMode === 'trim' || data.eraserMode === 'segment'){
+        if(data.eraserMode === 'trim' || data.eraserMode === 'segment' ||
+     data.eraserMode === 'trimOne' || data.eraserMode === 'trimTwo'){
     eraserMode = data.eraserMode;
   }
+  /* Миграция старых проектов: 'trim' → 'trimTwo' */
+  if(eraserMode === 'trim') eraserMode = 'trimTwo';
   selection = []; nodeSel.clear();
   syncCamInputs(); updateToolpathBtn(); updateNumbersBtn();
   updateViewToggles(); updateViewSeg(); updateIsoUI(); updateStatusChips();
@@ -6866,17 +6869,21 @@ extra+='<div class="card" id="rulerCard"><div class="card-h">Измерения 
 }
 if(tool==='eraser'){
   var isSeg = eraserMode === 'segment';
-  var isTrim = eraserMode === 'trim';
+  var isOne = eraserMode === 'trimOne';
+  var isTwo = eraserMode === 'trimTwo';
   extra += '<div class="card" id="eraserCard"><div class="card-h">Ножницы</div>';
   extra += '<div class="fld"><label>Режим работы</label>'
         +  '<div class="calc-seg" id="eraserModeSeg">'
         +    '<button data-v="segment"'+(isSeg?' class="on"':'')+'>Сегмент</button>'
-        +    '<button data-v="trim"'+(isTrim?' class="on"':'')+'>Обрезка</button>'
+        +    '<button data-v="trimOne"'+(isOne?' class="on"':'')+'>До линии</button>'
+        +    '<button data-v="trimTwo"'+(isTwo?' class="on"':'')+'>Между линиями</button>'
         +  '</div></div>';
   extra += '<div class="hint">'
         +  (isSeg
-            ? '<b>Сегмент</b> — клик по линии удаляет её между соседними узлами.'
-            : '<b>Обрезка</b> — клик по линии удаляет участок до ближайших пересечений с другими контурами или направляющими. Если пересечений нет — работает как обычное удаление сегмента.')
+            ? '<b>Сегмент</b> — клик по линии удаляет её между соседними узлами (замкнутый контур размыкается, открытый делится надвое).'
+            : isOne
+            ? '<b>До линии</b> — клик по линии удаляет участок от точки клика до <b>ближайшего</b> пересечения с другим контуром или направляющей. Если пересечений нет — работает как «Сегмент».'
+            : '<b>Между линиями</b> — клик по линии удаляет участок <b>между двумя</b> ближайшими пересечениями, охватывающими точку клика. Если пересечений нет — работает как «Сегмент».')
         +  '</div>';
   extra += '</div>';
 }
@@ -7024,10 +7031,15 @@ if(tool==='eraser'){
   if(segE) segE.onclick = function(e){
     var btn = e.target.closest('button[data-v]');
     if(!btn) return;
-    eraserMode = btn.dataset.v;
+    var v = btn.dataset.v;
+    if(v === 'segment' || v === 'trimOne' || v === 'trimTwo'){
+      eraserMode = v;
+    }
     renderProps();
+    renderOverlay();
     scheduleSave();
   };
+} };
 }
 }
 function renderProps(){ renderPropsInner(); bindPolyCard(); }
@@ -7058,7 +7070,7 @@ select:'Клик — выбор · Ctrl+клик — объект под объ�
 transform:'Маркеры рамки — размер · Перетаскивание — перемещение · Shift за угол — пропорции · Shift+перетаскивание тела — строго по горизонтали или вертикали',
 rotate:'Клик по окружности или внутри — вращение с шагом 5°',
 node:'Тяните узлы и ручки Безье · 2×клик по узлу — сгладить/угол · по сегменту — добавить узел · Alt ломает симметрию ручек',
-eraser:'Клик по сегменту удаляет линию: замкнутый контур размыкается, открытый делится надвое',
+eraser:'Режим «Сегмент» — клик удаляет линию между соседними узлами · «До линии» — удаляет участок от клика до ближайшего пересечения · «Между линиями» — удаляет участок между двумя пересечениями · режим переключается в панели справа',
 start:'Клик по узлу делает его стартом реза (точка врезки в G-code)',
 join:'Клик по концу первого открытого вектора, затем по концу второго. Совпадающие концы смыкаются, далёкие соединяются отрезком',
 knife:'Клик по 1-й замкнутой фигуре → по 2-й. Обе разрежутся, соединятся мостиком и замкнутся. Фигуры не должны пересекаться · ПКМ/Esc — отмена',
@@ -7817,8 +7829,12 @@ function splitContourByRange(param, from, to){
   }
 }
 
-/* Основная операция: обрезка по клику. */
-function trimContourByClick(hit, worldPt){
+/* Основная операция: обрезка по клику.
+   mode:
+     'trimOne' — удалить от точки клика до ближайшего пересечения;
+     'trimTwo' — удалить между двумя пересечениями вокруг точки клика. */
+function trimContourByClick(hit, worldPt, mode){
+  mode = mode || 'trimTwo';
   var o = hit.o;
   var param = buildContourParam(o);
   if(!param){ toast('Не удалось прочитать контур'); return false; }
@@ -7826,22 +7842,60 @@ function trimContourByClick(hit, worldPt){
   var clickLen = arcLenAtPoint(param, worldPt);
   var ints = findContourIntersections(o, param);
   if(!ints.length){
-    /* Нет пересечений — классическое поведение: удаляем сегмент */
+    /* Нет пересечений — выходим с false → наверху сработает removeSegment */
     return false;
   }
 
-  /* Ближайшее слева и справа от clickLen */
-  var leftLen = 0, rightLen = param.total;
-  for(var i = 0; i < ints.length; i++){
-    if(ints[i].arcLen < clickLen - 0.05){
-      leftLen = ints[i].arcLen;
-    } else if(ints[i].arcLen > clickLen + 0.05){
-      rightLen = ints[i].arcLen;
-      break;
+  var leftLen, rightLen;
+
+  if(mode === 'trimOne'){
+    /* ═══ Режим 2: от точки до ближайшего пересечения ═══
+       Ищем ближайшее пересечение слева и справа от клика,
+       удаляем участок в сторону того, которое ближе. */
+    var leftInt  = null;
+    var rightInt = null;
+    for(var i = 0; i < ints.length; i++){
+      if(ints[i].arcLen < clickLen - 0.05){
+        leftInt = ints[i].arcLen;             /* последнее слева */
+      } else if(ints[i].arcLen > clickLen + 0.05){
+        rightInt = ints[i].arcLen;            /* первое справа */
+        break;
+      }
+    }
+
+    var distL = (leftInt  !== null) ? (clickLen - leftInt)  : Infinity;
+    var distR = (rightInt !== null) ? (rightInt  - clickLen) : Infinity;
+
+    if(distL === Infinity && distR === Infinity){
+      toast('Нет пересечений рядом с точкой клика');
+      return false;
+    }
+
+    if(distL <= distR){
+      /* Удаляем участок [leftInt, clickLen] */
+      leftLen  = leftInt;
+      rightLen = clickLen;
+    } else {
+      /* Удаляем участок [clickLen, rightInt] */
+      leftLen  = clickLen;
+      rightLen = rightInt;
+    }
+  } else {
+    /* ═══ Режим 3: между двумя пересечениями ═══
+       Ищем пересечение слева и справа от клика, удаляем всё между ними. */
+    leftLen  = 0;
+    rightLen = param.total;
+    for(var i2 = 0; i2 < ints.length; i2++){
+      if(ints[i2].arcLen < clickLen - 0.05){
+        leftLen = ints[i2].arcLen;
+      } else if(ints[i2].arcLen > clickLen + 0.05){
+        rightLen = ints[i2].arcLen;
+        break;
+      }
     }
   }
 
-  /* Нечего резать */
+  /* Нечего резать — слишком короткий кусок */
   if(rightLen - leftLen < 0.1){
     toast('Участок слишком мал');
     return false;
@@ -7855,7 +7909,6 @@ function trimContourByClick(hit, worldPt){
 
   pushHistory();
 
-  /* Заменяем объект на получившиеся части */
   var idx = objects.indexOf(o);
   objects.splice(idx, 1);
 
@@ -7876,7 +7929,10 @@ function trimContourByClick(hit, worldPt){
   selection = newObjs.map(function(no){ return no.id; });
   eraserHover = null;
   afterChange();
-  toast('Обрезано по пересечениям — ' + newObjs.length + ' контур(а)', 'scissors');
+  toast(mode === 'trimOne'
+    ? 'Обрезано до ближайшей линии'
+    : 'Обрезано между линиями',
+    'scissors');
   return true;
 }
 function findSegmentHit(w){
@@ -8282,13 +8338,14 @@ afterChange(); return;
 if(tool==='eraser'){
   var hit5 = findSegmentHit(w);
   if(!hit5) return;
-  if(eraserMode === 'trim'){
-    /* Пробуем обрезать по пересечениям; если не получилось — fallback
-       на классическое удаление сегмента */
-    var trimmed = trimContourByClick(hit5, w);
-    if(!trimmed) removeSegment(hit5.o, hit5.i);
-  } else {
+  if(eraserMode === 'segment'){
+    /* Режим 1 — удаление сегмента между соседними узлами */
     removeSegment(hit5.o, hit5.i);
+  } else {
+    /* Режимы 2 и 3 — обрезка по пересечениям.
+       Если пересечений рядом нет — fallback на удаление сегмента. */
+    var trimmed = trimContourByClick(hit5, w, eraserMode);
+    if(!trimmed) removeSegment(hit5.o, hit5.i);
   }
   return;
 }
