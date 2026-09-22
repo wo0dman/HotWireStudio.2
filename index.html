@@ -7763,27 +7763,45 @@ function splitContourByRange(param, from, to){
   var closed = param.closed;
 
   if(closed){
-    /* Замкнутый: всегда один оставшийся контур. Если удалили всё — пусто.
-       Из «to» идём через конец массива в «from». */
-    if((to - from) < 1e-6) return [];
-    if((to - from) >= total - 1e-6) return [];
-    var part = [];
-    var pStart = pointAtArcLen(param, to);
-    part.push({x: pStart.x, y: pStart.y});
-    var n = param.pts.length;
-    var lens = param.lens;
-    for(var i = 0; i < n; i++){
-      var L = lens[i];
-      /* Узел в диапазоне [to, total] ∪ [0, from] */
-      var inRange = (L >= to - 1e-6) || (L <= from + 1e-6);
-      if(inRange && L > to + 1e-6 && L < from + total - 1e-6){
-        part.push({x: param.pts[i].x, y: param.pts[i].y});
-      }
+  /* Замкнутый: остаётся ровно один открытый контур.
+     Если вырезаем всё — вернуть пусто. */
+  if((to - from) < 1e-6) return [];
+  if((to - from) >= total - 1e-6) return [];
+
+  var part = [];
+  var n = param.pts.length;
+  var lens = param.lens;
+
+  /* (1) Стартовая точка оставшегося контура — та, где ЗАКОНЧИЛСЯ
+         удаляемый участок (arcLen = to). */
+  var pStart = pointAtArcLen(param, to);
+  part.push({x: pStart.x, y: pStart.y});
+
+  /* (2) Узлы с длиной дуги в (to, total) — идём вперёд от to к концу. */
+  for(var i = 0; i < n; i++){
+    var L1 = lens[i];
+    if(L1 > to + 1e-6 && L1 < total - 1e-6){
+      part.push({x: param.pts[i].x, y: param.pts[i].y});
     }
-    var pEnd = pointAtArcLen(param, from);
-    if(dist(part[part.length-1], pEnd) > 1e-6) part.push({x: pEnd.x, y: pEnd.y});
-    return [{pts: part, closed: false}];
-  } else {
+  }
+
+  /* (3) ЗАВОРОТ: узлы с длиной дуги в (0, from) — обходим через 0. */
+  for(var j = 0; j < n; j++){
+    var L2 = lens[j];
+    if(L2 > 1e-6 && L2 < from - 1e-6){
+      part.push({x: param.pts[j].x, y: param.pts[j].y});
+    }
+  }
+
+  /* (4) Конечная точка — там, где НАЧАЛСЯ удаляемый участок
+         (arcLen = from). */
+  var pEnd = pointAtArcLen(param, from);
+  if(dist(part[part.length-1], pEnd) > 1e-6){
+    part.push({x: pEnd.x, y: pEnd.y});
+  }
+
+  return [{pts: part, closed: false}];
+} else {
     /* Открытый: возможны 1 или 2 части. */
     var parts = [];
     if(from > 1e-6){
