@@ -6732,8 +6732,16 @@ else rrEl.value=polySet.r;
 function renderPropsInner(){
 var box=$('#propsBox');
 var sel=selected();
+
+/* ═══ Верхние карточки ═══
+   polyCard (многоугольник) и eraserCard (ножницы) всегда рендерятся
+   в самом верху панели «Объект» во всех ветках — это гарантирует,
+   что при активации инструмента карточка не «прыгает» по вкладке
+   и не исчезает при смене выделения. */
+var topCards = polyCardHTML() + eraserCardHTML();
+
 if(!sel.length){
-box.innerHTML=polyCardHTML()+eraserCardHTML()+
+box.innerHTML=topCards+
 '<div class="card"><div class="empty-state">'+
 '<div class="es-ic">'+icon('cube',26)+'</div>'+
 '<b>Ничего не выбрано</b>'+
@@ -6761,7 +6769,7 @@ var selNoGroups=sel.filter(function(o){return o.type!=='group';});
 if(sel.length>1&&selNoGroups.length>0){
 var allClosed=selNoGroups.every(function(o){return o.closed;});
 var gb=selBBox(sel);
-box.innerHTML=polyCardHTML()+
+box.innerHTML=topCards+
 cardHTML('Выбрано: '+selNoGroups.length,'габарит '+r2(gb.w)+' × '+r2(gb.h)+' мм',
 fld('Масштабировать до ширины, мм','<div style="display:flex;gap:8px"><input type="number" step="1" min="0.1" class="inp mono" id="pScaleToW" value="'+r2(gb.w)+'" style="flex:1"><button class="btn tint" id="pScaleBtn" style="flex:none;padding:0 14px">OK</button></div>')+
 '<div class="btnrow"><button class="btn" id="pDup">'+icon('copy',14)+' Дублировать</button><button class="btn danger" id="pDel">'+icon('trash',14)+' Удалить</button></div>'+
@@ -6796,7 +6804,7 @@ return;
 if(sel.length===1&&sel[0].type==='group'){
 var gr=sel[0];
 var grNum=currentLayerNumbers[gr.id];
-box.innerHTML=polyCardHTML()+cardHTML('Группа','слой № '+(grNum!==undefined?grNum:'—'),
+box.innerHTML=topCards+cardHTML('Группа','слой № '+(grNum!==undefined?grNum:'—'),
 fld('Имя','<input class="inp" id="pGroupName" value="'+esc(gr.name)+'" spellcheck="false">')+
 '<div class="fld"><label>Цвет</label></div><div class="swatches" id="pSw" style="padding-top:0">'+
 PALETTE.map(function(c){return '<div class="swatch '+(gr.color===c?'active':'')+'" data-c="'+c+'" style="background:'+c+'"></div>';}).join('')+'</div>'+
@@ -6822,7 +6830,7 @@ $('#pDelGroup').onclick=deleteSel;
 $('#pUngroup').onclick=ungroupSelected;
 return;
 }
-if(!selNoGroups.length){ box.innerHTML=polyCardHTML()+cardHTML('Свойства','','<div class="hint">Выбрана группа без геометрии.</div>'); return; }
+if(!selNoGroups.length){ box.innerHTML=topCards+cardHTML('Свойства','','<div class="hint">Выбрана группа без геометрии.</div>'); return; }
 var o=selNoGroups[0], b=objBBox(o);
 var mYpos=r2(-(b.y+b.h));
 var oNum=currentLayerNumbers[o.id];
@@ -6943,9 +6951,7 @@ var diagR=Math.hypot(b.w,b.h);
 extra+='<div class="card" id="rulerCard"><div class="card-h">Измерения объекта</div><div class="hint" style="padding-top:6px">'+
 'Ширина: <b>'+fmtLen(b.w)+'</b><br>Высота: <b>'+fmtLen(b.h)+'</b><br>Диагональ габарита: <b>'+fmtLen(diagR)+'</b><br>Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b></div></div>';
 }
-if(tool==='eraser'){
-  extra += eraserCardHTML();
-}
+
 if(tool==='knife'){
 extra+='<div class="card" id="knifeCard"><div class="card-h">Инструмент «Нож»</div><div class="hint" style="padding-top:6px">'+
 'Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b><br>Точек: <b>'+o.points.length+'</b> · Замкнут: <b>'+(o.closed?'да':'нет')+'</b></div>'+
@@ -6953,7 +6959,7 @@ extra+='<div class="card" id="knifeCard"><div class="card-h">Инструмен�
 }
 var actions='<div class="btnrow" style="padding-top:10px"><button class="btn" id="pDup">'+icon('copy',14)+' Дубль</button><button class="btn danger" id="pDel">'+icon('trash',14)+' Удалить</button></div>'+
 (nCurves?'<div class="btnrow"><button class="btn" id="pLin">'+icon('linearize',14)+' Линеаризовать ('+nCurves+' кривых)</button></div>':'');
-box.innerHTML=polyCardHTML()+cardHTML('Свойства','слой № '+(oNum!==undefined?oNum:'—')+' · Y↑',body+actions)+extra;
+box.innerHTML=topCards+cardHTML('Свойства','слой № '+(oNum!==undefined?oNum:'—')+' · Y↑',body+actions)+extra;
 $('#pName').onchange=function(e){pushHistory();o.name=e.target.value||o.name;afterChange();};
 function num(id){var v=parseFloat($(id).value);return isNaN(v)?null:v;}
 $('#pX').onchange=function(){var v=num('#pX');if(v!==null){pushHistory();moveObjectBy(o,v-objBBox(o).x,0);afterChange();}};
