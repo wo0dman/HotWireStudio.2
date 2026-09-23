@@ -1192,6 +1192,7 @@ button.chip:hover{background:var(--fill)}
 <div class="fld" style="padding-bottom:6px"><label>Отступ от края, мм</label><input id="cMargin" type="number" step="0.5" class="inp mono" min="0"></div>
 <label class="srow"><span class="stxt">Вернуться в ноль после работы</span><span class="sw"><input type="checkbox" id="cHome"><i></i></span></label>
 <label class="srow"><span class="stxt">Показывать траекторию реза<small>Оранжевые стрелки направления на холсте</small></span><span class="sw"><input type="checkbox" id="cShow"><i></i></span></label>
+<label class="srow"><span class="stxt">Комментарии в G-code<small>Отключите, если станок не принимает строки, начинающиеся с «;»</small></span><span class="sw"><input type="checkbox" id="cComments"><i></i></span></label>
 <div class="note-pill">Порядок резки соответствует нумерации слоёв: от меньшего номера к большему.</div>
 </div>
 <div class="card">
@@ -1682,10 +1683,11 @@ var dragLayerId=null;
 var layerQuery='';
 var clipboard=null;
 var gset={
-feed:300, rapid:2500, on:'M3 S255', off:'M5', dwell:1.5,
+feed:300, rapid:2500, on:'M3 S1000', off:'M5', dwell:1.5,
 kerfMode:'outside', kerf:0.3, passes:1, tol:0.05,
 reverse:false, useLead:false, leadX:0, leadY:0,
 toZero:true, margin:5, home:false, showTool:true,
+comments:true,
 prefix:'', suffix:''
 };
 /* ═══ Правила именования выходных G-code файлов ═══ */
@@ -7293,6 +7295,26 @@ lines.push('G0 X0 Y0 ; возврат в ноль');
 }
 if(suffixLn.length){lines.push('; --- пользовательские команды (конец) ---');lines.push.apply(lines,suffixLn);}
 lines.push('M2 ; конец программы');
+
+/* ═══ Обработка комментариев ═══
+   Если пользователь отключил вывод комментариев — удаляем все строки,
+   начинающиеся с «;», а также обрезаем inline-комментарии в остальных
+   строках. Пустые строки, образовавшиеся после этого, тоже убираем.
+   Явное сравнение с false: если поле отсутствует в старом проекте —
+   комментарии остаются включёнными по умолчанию. */
+if(gset.comments === false){
+  var cleaned=[];
+  for(var li=0; li<lines.length; li++){
+    var l=lines[li];
+    var ci=l.indexOf(';');
+    if(ci===0) continue;                     /* строка целиком — комментарий */
+    if(ci>0) l=l.slice(0,ci).replace(/\s+$/,'');
+    if(l.trim()==='') continue;              /* пустая строка */
+    cleaned.push(l);
+  }
+  lines=cleaned;
+}
+
 var time=cut/F*60+rap/FR*60+(+gset.dwell||0)*cs.length;
 gres={code:lines.join('\n'),cut:cut,rap:rap,time:time,segs:segs,count:cs.length,cs:cs,rapids:rapids};
 }
@@ -9996,6 +10018,7 @@ var CAM_BIND=[
 ['cKerfMode','kerfMode'],['cKerf','kerf'],['cPasses','passes'],['cTol','tol'],
 ['cReverse','reverse'],['cUseLead','useLead'],['cLeadX','leadX'],['cLeadY','leadY'],
 ['cZero','toZero'],['cMargin','margin'],['cHome','home'],['cShow','showTool'],
+['cComments','comments'],
 ['cPrefix','prefix'],['cSuffix','suffix']
 ];
 function syncCamInputs(){
