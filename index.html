@@ -336,7 +336,8 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 #statusbar{height:36px;flex:none;background:var(--bar);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-top:.5px solid var(--sep);display:flex;align-items:center;gap:10px;padding:0 14px;font-size:11.5px;color:var(--label2);z-index:40}
 #stCoord{font-family:var(--fm);font-size:11px;min-width:180px;color:#48484A}
 #stCoord b{color:var(--blue);font-weight:600}
-#stHint{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--label3)}
+#stHint{flex:1;white-space:nowrap;overflow:hidden;color:var(--label3);position:relative;min-width:0}
+#stHint .tick{display:inline-block;white-space:nowrap;will-change:transform;pointer-events:none}
 .st-sep{width:.5px;height:18px;background:var(--sep);flex:none}
 .chip{display:flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:7px;color:var(--label2);font-size:11px;font-weight:500;transition:background .13s,color .13s;flex:none;position:relative}
 button.chip:hover{background:var(--fill)}
@@ -2071,6 +2072,102 @@ function offsetClosed(pts, d, opts){
     o.miterLimit || 2,
     !!o.removeLoops
   );
+}
+/* ═══════════════ OFFSET ДЛЯ ОТКРЫТОЙ ПОЛИЛИНИИ ═══════════════
+   Строит параллельную линию на расстоянии dSigned.
+   dSigned > 0 — «наружу» (справа от направления обхода),
+   dSigned < 0 — «внутрь» (слева от направления обхода).
+   Углы: miter / round / bevel (аналогично замкнутому offset). */
+function offsetOpenProper(pts, dSigned, jointType, miterLimit){
+  if(!pts || pts.length < 2) return null;
+  jointType  = jointType  || 'miter';
+  miterLimit = (miterLimit > 0) ? miterLimit : 2;
+
+  /* убираем дубли подряд */
+  var clean = [pts[0]];
+  for(var i=1; i<pts.length; i++){
+    if(dist(clean[clean.length-1], pts[i]) > 1e-9) clean.push(pts[i]);
+  }
+  pts = clean;
+  var n = pts.length;
+  if(n < 2) return null;
+
+  var result = [];
+  function push(p){
+    if(result.length && dist(result[result.length-1], p) < 1e-7) return;
+    result.push(p);
+  }
+
+  for(var i=0; i<n; i++){
+    if(i === 0){
+      /* первая точка: сдвиг по нормали первого сегмента */
+      var p0 = pts[0], p1 = pts[1];
+      var dx = p1.x - p0.x, dy = p1.y - p0.y;
+      var L = Math.hypot(dx, dy) || 1;
+      push({x: p0.x + (dy/L) * dSigned, y: p0.y + (-dx/L) * dSigned});
+      continue;
+    }
+    if(i === n-1){
+      /* последняя точка: сдвиг по нормали последнего сегмента */
+      var pa = pts[n-2], pb = pts[n-1];
+      var dx2 = pb.x - pa.x, dy2 = pb.y - pa.y;
+      var L2 = Math.hypot(dx2, dy2) || 1;
+      push({x: pb.x + (dy2/L2) * dSigned, y: pb.y + (-dx2/L2) * dSigned});
+      continue;
+    }
+
+    /* средняя точка — узел между двумя сегментами */
+    var pm = pts[i-1], pv = pts[i], pn = pts[i+1];
+    var d1x = pv.x - pm.x, d1y = pv.y - pm.y;
+    var d2x = pn.x - pv.x, d2y = pn.y - pv.y;
+    var l1 = Math.hypot(d1x, d1y) || 1;
+    var l2 = Math.hypot(d2x, d2y) || 1;
+    var inDir  = {x: d1x/l1, y: d1y/l1};
+    var outDir = {x: d2x/l2, y: d2y/l2};
+
+    var A = {x: pv.x + inDir.y  * dSigned, y: pv.y - inDir.x  * dSigned};
+    var B = {x: pv.x + outDir.y * dSigned, y: pv.y - outDir.x * dSigned};
+
+    var dAB = Math.hypot(B.x - A.x, B.y - A.y);
+    if(dAB < 1e-7){
+      push(A);
+      continue;
+    }
+
+    if(jointType === 'bevel'){
+      push(A); push(B);
+      continue;
+    }
+
+    if(jointType === 'round'){
+      var r = Math.abs(dSigned);
+      var aA = Math.atan2(A.y - pv.y, A.x - pv.x);
+      var aB = Math.atan2(B.y - pv.y, B.x - pv.x);
+      var sweep = aB - aA;
+      while(sweep >  Math.PI) sweep -= 2*Math.PI;
+      while(sweep < -Math.PI) sweep += 2*Math.PI;
+      var steps = Math.max(2, Math.ceil(Math.abs(sweep) / (Math.PI/10)));
+      push(A);
+      for(var s=1; s<steps; s++){
+        var t = aA + sweep * s / steps;
+        push({x: pv.x + r*Math.cos(t), y: pv.y + r*Math.sin(t)});
+      }
+      push(B);
+      continue;
+    }
+
+    /* miter */
+    var ip = lineInter(A, {x:A.x + inDir.x,  y:A.y + inDir.y},
+                       B, {x:B.x + outDir.x, y:B.y + outDir.y});
+    if(ip){
+      var mdist = Math.hypot(ip.x - pv.x, ip.y - pv.y);
+      var lim = Math.abs(dSigned) * miterLimit;
+      if(mdist <= lim){ push(ip); continue; }
+    }
+    push(A); push(B);
+  }
+
+  return result;
 }
 /* ═══════════════ OFFSET v2: ПРАВИЛЬНЫЕ СОЕДИНЕНИЯ + УДАЛЕНИЕ ПЕТЕЛЬ ═══════════════ */
 
@@ -4070,6 +4167,20 @@ else if(ob.points) map.set(ob.id, JSON.parse(JSON.stringify(ob.points)));
 })(o);
 });
 return map;
+}
+/* Центр габарита по карте исходных точек (map<id, points>).
+   Используется для привязки «за центр» при перемещении. */
+function computeCenterFromOrigMap(map){
+  var x0=1e12,y0=1e12,x1=-1e12,y1=-1e12;
+  map.forEach(function(pts){
+    for(var j=0;j<pts.length;j++){
+      var p=pts[j];
+      if(p.x<x0)x0=p.x; if(p.y<y0)y0=p.y;
+      if(p.x>x1)x1=p.x; if(p.y>y1)y1=p.y;
+    }
+  });
+  if(x0===1e12) return {x:0,y:0};
+  return {x:(x0+x1)/2, y:(y0+y1)/2};
 }
 function restoreAndTransform(origMap, fn){
 origMap.forEach(function(pts,id){
@@ -6145,7 +6256,23 @@ if(guideDrag && guideDrag.curW){
      + ' fill="rgba(0,122,255,.32)" stroke="#007AFF" stroke-width="2"'
      + ' vector-effect="non-scaling-stroke" pointer-events="none"/>';
 }
-
+/* ═══ Маркер активного якоря при перемещении ═══
+   Показываем точку, от которой идёт привязка: при Alt — центр габарита
+   (оранжевый), без Alt — ближайшая вершина (синий). */
+if(drag && drag.mode === 'move' && drag.moved && drag._activeAnchor){
+  var sM = viewScaleEff();
+  var useC = !!drag.centerOrig && drag._activeAnchor === drag.centerOrig;
+  var colM = useC ? '#FF9500' : '#007AFF';
+  var rM = (useC ? 6 : 4.5) / sM;
+  h += '<circle cx="'+drag._activeAnchor.x+'" cy="'+drag._activeAnchor.y+'" r="'+rM+'"'
+     + ' fill="'+colM+'" stroke="#fff" stroke-width="1.6"'
+     + ' vector-effect="non-scaling-stroke" pointer-events="none"/>';
+  if(useC){
+    h += '<circle cx="'+drag._activeAnchor.x+'" cy="'+drag._activeAnchor.y+'" r="'+(rM*2)+'"'
+       + ' fill="none" stroke="'+colM+'" stroke-width="1.2" stroke-dasharray="3 3"'
+       + ' vector-effect="non-scaling-stroke" pointer-events="none"/>';
+  }
+}
 /* ═══ OSNAP: маркер найденной точки ═══
    Показываем только если не выключен тумблером «Значки и подписи».
    Сама привязка продолжает работать. */
@@ -6350,7 +6477,21 @@ h+=rulerLabel(ha.x+16/sR,ha.y+16/sR,hintLines,sR);
 /* ═══ Отступ: призрак результата ═══ */  
 if(tool==='offset' && selection.length){
   var sOff = viewScaleEff();
-  var validOff = selected().filter(function(o){ return o.type !== 'group' && o.closed; });
+  var validOff     = selected().filter(function(o){ return o.type !== 'group' && o.closed; });
+  var validOffOpen = selected().filter(function(o){ return o.type !== 'group' && !o.closed; });
+  /* Призрак для открытых линий */
+  if(validOffOpen.length){
+    var dOffO = (offsetState.dir === 'outside' ? 1 : -1) * offsetState.dist;
+    for(var io2=0; io2<validOffOpen.length; io2++){
+      var pO2 = objectToPoly(validOffOpen[io2], 0.05);
+      if(!pO2 || pO2.pts.length < 2) continue;
+      var gPts = offsetOpenProper(pO2.pts, dOffO, offsetState.joint, offsetState.miterLimit);
+      if(!gPts || gPts.length < 2) continue;
+      var dO2 = 'M ' + gPts[0].x + ' ' + gPts[0].y;
+      for(var qo2=1; qo2<gPts.length; qo2++) dO2 += ' L ' + gPts[qo2].x + ' ' + gPts[qo2].y;
+      h += '<path d="'+dO2+'" fill="none" stroke="rgba(0,122,255,.6)" stroke-width="1.4" stroke-dasharray="7 5" vector-effect="non-scaling-stroke" pointer-events="none"/>';
+    }
+  }
   if(validOff.length){
     var srcPolys = [];
     for(var io=0; io<validOff.length; io++){
@@ -6682,53 +6823,75 @@ function mirrorSelectionVertical(){
   toast('Отражено объектов: ' + sel.length + ' (ось X = ' + r2(cx) + ' мм)', 'mirrorAxis');
 }
 function applyOffset(){
-var sel=selected();
-if(!sel.length){ toast('Выберите хотя бы один замкнутый контур'); return; }
-var valid=sel.filter(function(o){return o.type!=='group'&&o.closed;});
-if(valid.length===0){ toast('Выберите замкнутые контуры, не группы'); return; }
-var offsetDist = offsetState.dist;
-var direction  = offsetState.dir;
-var distO = (direction === 'outside' ? 1 : -1) * offsetDist;
-var offsetOpts = {
-  joint:       offsetState.joint,
-  miterLimit:  offsetState.miterLimit,
-  removeLoops: offsetState.removeLoops
-};
-pushHistory();
-var polys=[];
-if(valid.length===1){
-var poly=objectToPoly(valid[0],0.05);
-if(poly&&poly.pts.length>=3) polys.push(poly.pts);
-} else {
-var srcPolys=[];
-for(var j=0;j<valid.length;j++){
-var p=objectToPoly(valid[j],0.05);
-if(p&&p.pts.length>=3) srcPolys.push(p.pts);
-}
-if(!srcPolys.length){ toast('Не удалось получить полигоны для объединения'); return; }
-var unionResult=applyBoolean(srcPolys,'union');
-if(!unionResult||!unionResult.length){ toast('Объединение не дало результатов'); return; }
-polys=unionResult;
-}
-if(!polys.length){ toast('Нет контуров для смещения'); return; }
-var newObjects=[];
-for(var k=0;k<polys.length;k++){
-var offsetPts=offsetClosed(polys[k],distO,offsetOpts);
-if(offsetPts&&offsetPts.length>=3){
-var ptsObj=offsetPts.map(function(pt){return mkPoint(pt.x,pt.y);});
-var name='Отступ '+offsetDist+'мм ('+(direction==='outside'?'внешний':'внутренний')+')';
-newObjects.push(addObject(ptsObj,true,name));
-} else if(direction==='inside'){
-toast('Внутренний отступ для одного из контуров не дал результата (малый радиус?)');
-}
-}
-if(!newObjects.length){
-toast('Не удалось создать отступ. Проверьте расстояние и форму.');
-undo(); return;
-}
-selection=newObjects.map(function(o){return o.id;});
-afterChange();
-toast('Создано объектов с отступом: '+newObjects.length,'offset');
+  var sel = selected();
+  if(!sel.length){ toast('Выберите хотя бы один контур'); return; }
+  var valid     = sel.filter(function(o){ return o.type !== 'group' &&  o.closed; });
+  var validOpen = sel.filter(function(o){ return o.type !== 'group' && !o.closed; });
+  if(valid.length === 0 && validOpen.length === 0){
+    toast('Выберите контуры (не группы)'); return;
+  }
+
+  var offsetDist = offsetState.dist;
+  var direction  = offsetState.dir;
+  var distO      = (direction === 'outside' ? 1 : -1) * offsetDist;
+  var offsetOpts = {
+    joint:       offsetState.joint,
+    miterLimit:  offsetState.miterLimit,
+    removeLoops: offsetState.removeLoops
+  };
+
+  pushHistory();
+  var newObjects = [];
+
+  /* ═══ 1. Замкнутые контуры ═══ */
+  if(valid.length > 0){
+    var polys = [];
+    if(valid.length === 1){
+      var poly = objectToPoly(valid[0], 0.05);
+      if(poly && poly.pts.length >= 3) polys.push(poly.pts);
+    } else {
+      var srcPolys = [];
+      for(var j = 0; j < valid.length; j++){
+        var p = objectToPoly(valid[j], 0.05);
+        if(p && p.pts.length >= 3) srcPolys.push(p.pts);
+      }
+      if(srcPolys.length){
+        var unionResult = applyBoolean(srcPolys, 'union');
+        if(unionResult && unionResult.length) polys = unionResult;
+      }
+    }
+    for(var k = 0; k < polys.length; k++){
+      var offsetPts = offsetClosed(polys[k], distO, offsetOpts);
+      if(offsetPts && offsetPts.length >= 3){
+        var ptsObj = offsetPts.map(function(pt){ return mkPoint(pt.x, pt.y); });
+        var name = 'Отступ ' + offsetDist + 'мм (' +
+                   (direction === 'outside' ? 'внешний' : 'внутренний') + ')';
+        newObjects.push(addObject(ptsObj, true, name));
+      }
+    }
+  }
+
+  /* ═══ 2. Открытые контуры ═══ */
+  for(var k2 = 0; k2 < validOpen.length; k2++){
+    var polyO = objectToPoly(validOpen[k2], 0.05);
+    if(!polyO || polyO.pts.length < 2) continue;
+    var ptsO = offsetOpenProper(polyO.pts, distO, offsetState.joint, offsetState.miterLimit);
+    if(ptsO && ptsO.length >= 2){
+      var ptsObjO = ptsO.map(function(pt){ return mkPoint(pt.x, pt.y); });
+      var nameO = 'Отступ ' + offsetDist + 'мм (' +
+                  (direction === 'outside' ? 'справа' : 'слева') + ' от линии)';
+      newObjects.push(addObject(ptsObjO, false, nameO));
+    }
+  }
+
+  if(!newObjects.length){
+    toast('Не удалось создать отступ. Проверьте расстояние и форму.');
+    undo();
+    return;
+  }
+  selection = newObjects.map(function(o){ return o.id; });
+  afterChange();
+  toast('Создано объектов с отступом: ' + newObjects.length, 'offset');
 }
 /* ═══════════════ МАССИВ КОПИЙ (ARRAY) ═══════════════ */
 
@@ -7101,7 +7264,7 @@ if(tool==='offset'){
         +  '<span class="sw"><input type="checkbox" id="offsetRemoveLoops"'+(st.removeLoops?' checked':'')+'><i></i></span></label>';
 
   extra += '<div class="btnrow"><button class="btn orange" id="offsetApply">'+icon('offset',14)+' Применить отступ</button></div>';
-  extra += '<div class="hint">Для пересекающихся фигур сначала выполняется объединение, затем отступ от силуэта. Синий пунктир на холсте — предпросмотр. Двойной клик по контуру — быстрое применение.</div>';
+  extra += '<div class="hint">Замкнутые фигуры: сначала объединяются (если их несколько), затем отступ от силуэта. Открытые полилинии: строится параллельная линия — «Внешний» справа, «Внутренний» слева от направления обхода. Синий пунктир на холсте — предпросмотр.</div>';
   extra += '</div>';
 }
 
@@ -7325,8 +7488,8 @@ $('#btnRedo').disabled=!future.length;
 $('#stCount').textContent = objects.length + ' объ.';
 }
 var HINTS={
-select:'Клик — выбор · Ctrl+клик — объект под объектом · Shift+клик — добавить/убрать · Рамка ← направо: полное вхождение (синяя), → налево: пересечение (красная) · Shift+перетаскивание — строго по горизонтали или вертикали · 2×клик — узлы · ПКМ — меню',
-transform:'Маркеры рамки — размер · Перетаскивание — перемещение · Shift за угол — пропорции · Shift+перетаскивание тела — строго по горизонтали или вертикали',
+select:'Клик — выбор · Ctrl+клик — объект под объектом · Shift+клик — добавить/убрать · Рамка ← направо: полное вхождение (синяя), → налево: пересечение (красная) · Shift+перетаскивание — по горизонтали/вертикали · Alt+перетаскивание — привязка «за центр габарита» · 2×клик — узлы · ПКМ — меню',
+transform:'Маркеры рамки — размер · Перетаскивание — перемещение · Shift за угол — пропорции · Shift+перетаскивание тела — по горизонтали/вертикали · Alt+перетаскивание — привязка «за центр габарита»',
 rotate:'Клик по окружности или внутри — вращение с шагом 5°',
 node:'Тяните узлы и ручки Безье · 2×клик по узлу — сгладить/угол · по сегменту — добавить узел · Alt ломает симметрию ручек',
 eraser:'Режим «Сегмент» — клик удаляет линию между соседними узлами · «До линии» — удаляет участок от клика до ближайшего пересечения · «Между линиями» — удаляет участок между двумя пересечениями · режим переключается в панели справа',
@@ -7345,19 +7508,64 @@ hand:'Перетаскивание — панорама · Колесо — ма
 revdir:'Стрелки показывают направление обхода · 2×клик по контуру — развернуть',
 offset:'Клик по фигуре — выделить · Shift+клик — добавить/убрать · Параметры — в панели справа · 2×клик по контуру — применить отступ'
 };
+var _lastHintText = '';
+var _hintAnim = null;
 function renderHint(){
-var txt;
-if(tool==='arc'&&arcDraft){
-txt=arcDraft.phase===1
-? 'Дуга: клик — начальная точка · Shift — угол 15° · ПКМ/Esc — отмена'
-: 'Дуга: клик — конечная точка · Shift — угол 15° · ПКМ/Esc — отмена';
-} else if(pen){
-txt='Рисуем контур: точек '+pen.points.length+'. '+HINTS.pen;
-} else {
-txt=HINTS[tool]||'';
-}
-if(solidMode()&&tool==='select') txt+=' · ISO 3D: тела толщиной '+isoThickness+' мм';
-$('#stHint').textContent=txt;
+  var txt;
+  if(tool==='arc'&&arcDraft){
+    txt=arcDraft.phase===1
+      ? 'Дуга: клик — начальная точка · Shift — угол 15° · ПКМ/Esc — отмена'
+      : 'Дуга: клик — конечная точка · Shift — угол 15° · ПКМ/Esc — отмена';
+  } else if(pen){
+    txt='Рисуем контур: точек '+pen.points.length+'. '+HINTS.pen;
+  } else {
+    txt=HINTS[tool]||'';
+  }
+  if(solidMode()&&tool==='select') txt+=' · ISO 3D: тела толщиной '+isoThickness+' мм';
+
+  /* Если текст не изменился — не перезапускаем анимацию */
+  if(txt === _lastHintText) return;
+  _lastHintText = txt;
+
+  var el = $('#stHint');
+  if(!el) return;
+
+  /* Отменяем предыдущую анимацию и заново строим содержимое */
+  if(_hintAnim){ try{ _hintAnim.cancel(); }catch(e){} _hintAnim = null; }
+  el.innerHTML = '<span class="tick"></span>';
+  var tick = el.firstChild;
+  tick.textContent = txt;
+  tick.style.transform = '';
+
+  /* После layout — измеряем и решаем: помещается / бежит */
+  requestAnimationFrame(function(){
+    var contentW = tick.scrollWidth;
+    var boxW = el.clientWidth;
+    if(boxW === 0) return;
+
+    /* Текст помещается целиком — статично */
+    if(contentW <= boxW){
+      tick.style.transform = 'translateX(0)';
+      return;
+    }
+
+    /* Бегущая строка: справа → влево, зациклено */
+    var distance = boxW + contentW;
+    var speed = 70;                                  /* px/сек */
+    var durMs = Math.max(6000, (distance / speed) * 1000);
+    try{
+      _hintAnim = tick.animate([
+        { transform: 'translateX(' + boxW + 'px)' },
+        { transform: 'translateX(-' + contentW + 'px)' }
+      ], {
+        duration: durMs,
+        iterations: Infinity,
+        easing: 'linear'
+      });
+    }catch(e){
+      /* Старые браузеры без Web Animations API — оставляем статично */
+    }
+  });
 }
 function afterChange(){
   if(typeof projMarkDirty === 'function') projMarkDirty();
@@ -8529,6 +8737,7 @@ if(d<bestDist){bestDist=d;anchorOrig={x:p.x,y:p.y};}
 }
 });
 drag.anchorOrig=anchorOrig||{x:w.x,y:w.y};
+drag.centerOrig=computeCenterFromOrigMap(origMap);
 afterChange(); return;
 }
 if(!e.shiftKey) selection=[];
@@ -8555,6 +8764,7 @@ if(d<bestDist2){bestDist2=d;anchorOrig2={x:p.x,y:p.y};}
 }
 });
 drag.anchorOrig=anchorOrig2||{x:w.x,y:w.y};
+drag.centerOrig=computeCenterFromOrigMap(origMap2);
 afterChange(); return;
 }
 }
@@ -8609,8 +8819,10 @@ if(selection.indexOf(hit4.id)!==-1) selection=selection.filter(function(id){retu
 else selection.push(hit4.id);
 } else if(selection.indexOf(hit4.id)===-1) selection=[hit4.id];
 nodeSel.clear();
-drag={mode:'move',start:w,orig:collectLeafOriginals(selected()),moved:false};
+var origMap3=collectLeafOriginals(selected());
+drag={mode:'move',start:w,orig:origMap3,moved:false};
 drag.anchorOrig={x:w.x,y:w.y};
+drag.centerOrig=computeCenterFromOrigMap(origMap3);
 afterChange(); return;
 }
 }
@@ -8933,7 +9145,10 @@ if(!drag.moved){
     pushHistory();
     drag.moved=true;
 }
-var anchorOrig=drag.anchorOrig;
+/* Alt — привязка «за центр»: якорь переключается на центр габарита выделения.
+   Без Alt — как раньше, от ближайшей вершины. */
+var anchorOrig = (e.altKey && drag.centerOrig) ? drag.centerOrig : drag.anchorOrig;
+drag._activeAnchor = anchorOrig;
 var currentAnchorPos={x:anchorOrig.x+(w.x-drag.start.x),y:anchorOrig.y+(w.y-drag.start.y)};
 var snapped=snapToObjects(currentAnchorPos,selection);
 var dx,dy;
@@ -11669,7 +11884,11 @@ renderObjects(); renderWorkArea(); renderGuides(); renderPanels(); renderHint();
 generateGcode(); renderCamPreview(); renderToolpath();
 simHud(); updatePlayBtn();
 fitToolbars();
-var onResize=function(){ renderGrid(); renderSolids(); renderOverlay(); fitToolbars(); };
+var onResize=function(){
+  renderGrid(); renderSolids(); renderOverlay(); fitToolbars();
+  _lastHintText = '';   /* сбросить кэш — подсказка перемерится */
+  renderHint();
+};
 if(typeof ResizeObserver!=='undefined'){
 new ResizeObserver(onResize).observe(wrap);
 new ResizeObserver(fitToolbarsDebounced).observe(document.getElementById('toolbar'));
