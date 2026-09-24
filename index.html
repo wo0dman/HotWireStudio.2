@@ -8604,20 +8604,20 @@ if(guideDrag){
          на самой направляющей. */
       guideDrag.curW = { x: snappedPt.x, y: snappedPt.y };
     } else {
-      /* ═══ 2b. Без привязки — обычная логика ═══ */
+            /* ═══ 2b. Без привязки — обычная логика ═══ */
       if(guideDrag.mode === 'slide'){
-        var dxm = w.x - guideDrag.startW.x;
-        var dym = w.y - guideDrag.startW.y;
-        var newPos;
-        if(guideDrag.kind === 'h'){
-          newPos = guideDrag.origPos - dym;
-        } else {
-          newPos = guideDrag.origPos + dxm;
+        var aRad = (gd.angle || 0) * Math.PI / 180;
+        var tanA = Math.tan(aRad);
+        if(isFinite(tanA)){
+          if(guideDrag.kind === 'h'){
+            gd.pos = -w.y - w.x * tanA;
+          } else {
+            gd.pos = w.x - w.y * tanA;
+          }
+          if(grid.snap && grid.size > 0){
+            gd.pos = Math.round(gd.pos / grid.size) * grid.size;
+          }
         }
-        if(grid.snap && grid.size > 0){
-          newPos = Math.round(newPos / grid.size) * grid.size;
-        }
-        gd.pos = newPos;
       } else {
         var vxF = w.x - guideDrag.anchor.x;
         var vyF = w.y - guideDrag.anchor.y;
