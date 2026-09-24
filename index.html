@@ -943,6 +943,9 @@ button.chip:hover{background:var(--fill)}
 }
 .calc-seg button:hover{color:var(--label)}
 .calc-seg button.on{background:#fff; color:var(--label); box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+/* ═══ Панель типов размеров ═══ */
+.dim-seg button{padding:0 4px; height:32px; flex:1}
+.dim-seg button svg{width:18px; height:18px; display:block}
 </style>
 </head>
 <body>
@@ -989,6 +992,7 @@ button.chip:hover{background:var(--fill)}
 <g id="simLayer" pointer-events="none"></g>
 <g id="overlayLayer" pointer-events="none"></g>
 </g>
+<g id="dimsLayer" pointer-events="none"></g>
 </g>
 <g id="labelsLayer" pointer-events="none"></g>
 </svg>
@@ -1214,6 +1218,7 @@ button.chip:hover{background:var(--fill)}
 <div class="rail-cap">Вид</div>
 <button class="rp-btn" id="btnShowToolpath" data-tip="Траектория и направление реза"></button>
 <button class="rp-btn" id="btnShowNumbers" data-tip="Номера слоёв на холсте · N"></button>
+<button class="rp-btn rp-on" id="btnShowDims" data-tip="Скрыть все размеры"></button>
 </nav>
 <aside id="side">
 <div class="segwrap"><div class="seg" id="mainSeg">
@@ -1425,6 +1430,11 @@ button.chip:hover{background:var(--fill)}
       <span class="ci" id="gridRowIconSnap"></span>
       <span style="flex:1">Магнит (привязка)</span>
       <span class="sw"><input type="checkbox" id="swGridSnap"><i></i></span>
+    </label>
+    <label class="osnap-row">
+      <span class="ci" id="gridRowIconDims"></span>
+      <span style="flex:1">Показывать размеры</span>
+      <span class="sw"><input type="checkbox" id="swGridDims"><i></i></span>
     </label>
   
     <div class="osnap-sep"></div>
@@ -1710,6 +1720,7 @@ mirror:'<path d="M12 3v18" stroke-dasharray="3 2.4"/><path d="M9.5 6.5 4 12l5.5 
 mirrorAxis:'<path d="M12 3v18" stroke-width="1.6"/><circle cx="7" cy="7.5" r="2"/><circle cx="17" cy="7.5" r="2"/><rect x="5" y="14.5" width="4" height="4" rx="0.8"/><rect x="15" y="14.5" width="4" height="4" rx="0.8"/>',
 compress:'<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
 cube:'<path d="M21 16V8l-9-5-9 5v8l9 5z"/><path d="m3.3 8.3 8.7 4.8 8.7-4.8M12 21v-7.9"/>',
+dimension:'<path d="M4 6v12M20 6v12"/><path d="M4 12h16" stroke-dasharray="3 2"/><path d="M7 10l-3 2 3 2M17 10l3 2-3 2"/>',
 calc:'<rect x="4.5" y="3" width="15" height="18" rx="2.5"/><rect x="7.5" y="6" width="9" height="3" rx=".7"/><circle cx="9" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="9" cy="16.5" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="16.5" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="16.5" r=".9" fill="currentColor" stroke="none"/>'
 
 };
@@ -1785,6 +1796,12 @@ var arrayState={
   centerY:null
 };
 var arcDraft=null;
+/* ═══ РАЗМЕРЫ (ГОСТ 2.307) ═══ */
+var dimensions = [];
+var dimDraft = null;
+var showDimensions = true;
+var dimensionState = { type: 'h', fontSize: 3.5 };
+var cursorWorld = { x: 0, y: 0 };
 var nodeSel=new Set();
 var eraserHover=null;
 var joinState=null, joinHover=null;
@@ -1848,6 +1865,7 @@ solidLayer=$('#solidLayer'), objectsLayer=$('#objectsLayer'), toolpathLayer=$('#
 simLayer=$('#simLayer'), overlayLayer=$('#overlayLayer'), workAreaLayer=$('#workAreaLayer'),
 labelsLayer=$('#labelsLayer');
 var guidesLayer=$('#guidesLayer');
+var dimsLayer=$('#dimsLayer');
 function findObj(id){for(var i=0;i<objects.length;i++)if(objects[i].id===id)return objects[i];return null;}
 function groupChildren(g){return (g.children||[]).map(findObj).filter(Boolean);}
 /* ═══════════════ ГЕОМЕТРИЯ ═══════════════ */
@@ -3861,7 +3879,8 @@ function focusToolCard(t){
         offset: 'offsetCard',
         array:  'arrayCard',
         ruler:  'rulerCard',
-        knife:  'knifeCard'
+       knife:  'knifeCard',
+    dimension: 'dimensionCard'
     };
     var id = map[t];
     if(!id) return false;
@@ -5234,7 +5253,8 @@ function projCollectData(){
     iso:iso, showNumbers:showNumbers, moveStep:moveStep,
     iso3D:iso3D, isoThickness:isoThickness, polySet:polySet,
     workArea:workArea, nestCfg:nestSaveCfg(), offsetCfg:offsetState,
-    osnapCfg:osnapSaveCfg(), guides:guides, eraserMode:eraserMode
+osnapCfg:osnapSaveCfg(), guides:guides, eraserMode:eraserMode,
+dimensions:dimensions, showDimensions:showDimensions, dimensionState:dimensionState
   };
 }
 function projApplyData(data){
@@ -5281,6 +5301,21 @@ function projApplyData(data){
         if(data.eraserMode === 'trim' || data.eraserMode === 'segment' ||
      data.eraserMode === 'trimOne' || data.eraserMode === 'trimTwo'){
     eraserMode = data.eraserMode;
+  }
+    dimensions = Array.isArray(data.dimensions) ? data.dimensions.filter(function(d){
+    return d && d.type === 'dimension' &&
+           ['h','v','aligned','angle','radius','diameter'].indexOf(d.dimType) >= 0;
+  }) : [];
+  if(data.showDimensions !== undefined) showDimensions = !!data.showDimensions;
+  if(data.dimensionState){
+    if(['h','v','aligned','angle','radius','diameter'].indexOf(data.dimensionState.type) >= 0)
+      dimensionState.type = data.dimensionState.type;
+    if(+data.dimensionState.fontSize > 0) dimensionState.fontSize = +data.dimensionState.fontSize;
+  }
+  var _rpDims = $('#btnShowDims');
+  if(_rpDims){
+    _rpDims.classList.toggle('rp-on', showDimensions);
+    _rpDims.setAttribute('data-tip', showDimensions ? 'Скрыть все размеры' : 'Показать все размеры');
   }
   /* Миграция старых проектов: 'trim' → 'trimTwo' */
   if(eraserMode === 'trim') eraserMode = 'trimTwo';
@@ -5472,27 +5507,28 @@ function projRegenThumbDebounced(){
 
 /* ═══════════════ ИСТОРИЯ ═══════════════ */
 function pushHistory(){
-history.push(JSON.stringify(objects));
-if(history.length>100) history.shift();
-future.length=0;
+  history.push(JSON.stringify({objects:objects, dimensions:dimensions}));
+  if(history.length>100) history.shift();
+  future.length=0;
+}
+function _applySnapshot(st){
+  if(Array.isArray(st)){ objects = st; dimensions = []; }
+  else { objects = st.objects || []; dimensions = st.dimensions || []; }
+  selection = selection.filter(function(id){ return !!findObj(id); });
+  joinState = null; joinHover = null; rulerReset(); knifeReset(); dimDraft = null;
+  if(nestState.preview){ nestState.preview = null; objectsLayer.style.opacity = ''; updateNestButtons(); }
 }
 function undo(){
-if(!history.length){ toast('Нечего отменять'); return; }
-future.push(JSON.stringify(objects));
-objects=JSON.parse(history.pop());
-selection=selection.filter(function(id){return !!findObj(id);});
-joinState=null; joinHover=null; rulerReset(); knifeReset();
-if(nestState.preview){ nestState.preview=null; objectsLayer.style.opacity=''; updateNestButtons(); }
-afterChange(); toast('Отменено','undo');
+  if(!history.length){ toast('Нечего отменять'); return; }
+  future.push(JSON.stringify({objects:objects, dimensions:dimensions}));
+  _applySnapshot(JSON.parse(history.pop()));
+  afterChange(); toast('Отменено','undo');
 }
 function redo(){
-if(!future.length) return;
-history.push(JSON.stringify(objects));
-objects=JSON.parse(future.pop());
-selection=selection.filter(function(id){return !!findObj(id);});
-joinState=null; joinHover=null; rulerReset(); knifeReset();
-if(nestState.preview){ nestState.preview=null; objectsLayer.style.opacity=''; updateNestButtons(); }
-afterChange(); toast('Повторено','redo');
+  if(!future.length) return;
+  history.push(JSON.stringify({objects:objects, dimensions:dimensions}));
+  _applySnapshot(JSON.parse(future.pop()));
+  afterChange(); toast('Повторено','redo');
 }
 /* ═══════════════ ВИД ═══════════════ */
 function toWorld(e){
@@ -5508,6 +5544,7 @@ isoGroup.setAttribute('transform',tf);
 if(isoA) isoA.setAttribute('transform',tf);
 $('#stZoom').textContent=Math.round(view.scale*100)+'%';
 renderGrid(); renderWorkArea(); renderSolids(); renderOverlay();
+renderDimensions();
 renderGuides();
 renderLabels();
 }
@@ -6256,6 +6293,47 @@ if(guideDrag && guideDrag.curW){
      + ' fill="rgba(0,122,255,.32)" stroke="#007AFF" stroke-width="2"'
      + ' vector-effect="non-scaling-stroke" pointer-events="none"/>';
 }
+/* ═══ Превью размерного черновика ═══ */
+if(dimDraft && tool === 'dimension'){
+  var sDd = viewScaleEff();
+  var draftPts = [dimDraft.p1];
+  if(dimDraft.p2) draftPts.push(dimDraft.p2);
+  if(dimDraft.p3) draftPts.push(dimDraft.p3);
+  draftPts.forEach(function(p){
+    h += '<circle cx="'+p.x+'" cy="'+p.y+'" r="'+(4.5/sDd)+'"'
+       + ' fill="#FF9500" stroke="#fff" stroke-width="1.4"'
+       + ' vector-effect="non-scaling-stroke"/>';
+  });
+  if(dimDraft.phase === 2 && dimDraft.dimType !== 'angle' && dimDraft.p2){
+    var pa = dimDraft.p1, pb = dimDraft.p2;
+    var offD = 40;
+    if(dimDraft.dimType === 'h')      offD = cursorWorld.y - pa.y;
+    else if(dimDraft.dimType === 'v') offD = cursorWorld.x - pa.x;
+    else {
+      var ddxD = pb.x - pa.x, ddyD = pb.y - pa.y;
+      var LD = Math.hypot(ddxD, ddyD) || 1;
+      offD = (cursorWorld.x - pa.x) * (-ddyD / LD) + (cursorWorld.y - pa.y) * (ddxD / LD);
+    }
+    if(Math.abs(offD) < 5) offD = offD < 0 ? -20 : 20;
+    h += renderDimensionSvg({
+      dimType: dimDraft.dimType,
+      p1: pa, p2: pb,
+      offset: offD,
+      fontSize: dimensionState.fontSize,
+      color: 'rgba(255,149,0,0.85)'
+    });
+  } else if(dimDraft.phase === 1){
+    h += '<line x1="'+dimDraft.p1.x+'" y1="'+dimDraft.p1.y+'"'
+       + ' x2="'+cursorWorld.x+'" y2="'+cursorWorld.y+'"'
+       + ' stroke="rgba(255,149,0,.6)" stroke-width="1"'
+       + ' stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>';
+  } else if(dimDraft.phase === 2 && dimDraft.dimType === 'angle'){
+    h += '<line x1="'+dimDraft.p1.x+'" y1="'+dimDraft.p1.y+'"'
+       + ' x2="'+cursorWorld.x+'" y2="'+cursorWorld.y+'"'
+       + ' stroke="rgba(255,149,0,.6)" stroke-width="1"'
+       + ' stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>';
+  }
+}
 /* ═══ Маркер активного якоря при перемещении ═══
    Показываем точку, от которой идёт привязка: при Alt — центр габарита
    (оранжевый), без Alt — ближайшая вершина (синий). */
@@ -6796,6 +6874,184 @@ h+='<text x="'+(pl.x+pl.w/2)+'" y="'+(wY+pl.h/2)+'" text-anchor="middle" dominan
 }
 overlayLayer.innerHTML=h;
 }
+/* ═══════════════════════════════════════════════════════════════
+   РАЗМЕРЫ (ГОСТ 2.307-2011)
+   ═══════════════════════════════════════════════════════════════ */
+
+function dimArrowHead(tipX, tipY, dirX, dirY, len, w, col){
+  var bx = tipX - dirX * len;
+  var by = tipY - dirY * len;
+  var p1x = bx - dirY * w;
+  var p1y = by + dirX * w;
+  var p2x = bx + dirY * w;
+  var p2y = by - dirX * w;
+  return '<path d="M '+tipX+' '+tipY+' L '+p1x+' '+p1y+' L '+p2x+' '+p2y+' Z" fill="'+col+'" stroke="none"/>';
+}
+
+function dimTextSvg(x, y, txt, fs, col, rotateDeg){
+  var r = rotateDeg || 0;
+  var rad = r * Math.PI / 180;
+  var offMag = fs * 0.7;
+  var px = x + offMag * Math.sin(rad);
+  var py = y - offMag * Math.cos(rad);
+  return '<text x="'+px+'" y="'+py+'" font-size="'+fs+'" fill="'+col+'" '
+       + 'text-anchor="middle" dominant-baseline="middle" '
+       + 'font-family="Inter,sans-serif" font-weight="500" '
+       + 'transform="rotate('+r+' '+px+' '+py+')" '
+       + 'style="paint-order:stroke;stroke:#fff;stroke-width:'+(fs*0.18).toFixed(2)+';stroke-linejoin:round">'
+       + esc(txt) + '</text>';
+}
+
+function renderDimensionSvg(d){
+  var col = d.color || '#1C1C1E';
+  var fs  = +d.fontSize || 3.5;
+  var sw  = 0.25;
+  var h   = '';
+
+  /* ─── Радиус и диаметр ─── */
+  if(d.dimType === 'radius' || d.dimType === 'diameter'){
+    var cx = d.p1.x, cy = d.p1.y;
+    var r  = +d.r || dist(d.p1, d.p2);
+    if(!(r > 0)) return '';
+    var end = d.p2 || {x: cx + r, y: cy};
+    var dx = end.x - cx, dy = end.y - cy;
+    var L  = Math.hypot(dx, dy) || 1;
+    var ux = dx / L, uy = dy / L;
+    var aLen = Math.min(5, r * 0.4);
+    var aW   = aLen * 0.35;
+    var tipX = cx + ux * r, tipY = cy + uy * r;
+
+    if(d.dimType === 'diameter'){
+      var tipX2 = cx - ux * r, tipY2 = cy - uy * r;
+      h += '<line x1="'+tipX2+'" y1="'+tipY2+'" x2="'+tipX+'" y2="'+tipY+'" stroke="'+col+'" stroke-width="'+sw+'"/>';
+      h += dimArrowHead(tipX, tipY, ux, uy, aLen, aW, col);
+      h += dimArrowHead(tipX2, tipY2, -ux, -uy, aLen, aW, col);
+      var lx = cx + ux * (r * 0.55);
+      var ly = cy + uy * (r * 0.55);
+      var rot = Math.atan2(uy, ux) * 180 / Math.PI;
+      if(rot > 90) rot -= 180;
+      if(rot < -90) rot += 180;
+      h += dimTextSvg(lx, ly, '⌀ ' + (r * 2).toFixed(1), fs, col, rot);
+    } else {
+      h += '<line x1="'+cx+'" y1="'+cy+'" x2="'+tipX+'" y2="'+tipY+'" stroke="'+col+'" stroke-width="'+sw+'"/>';
+      h += dimArrowHead(tipX, tipY, ux, uy, aLen, aW, col);
+      var lx2 = cx + ux * (r * 0.5);
+      var ly2 = cy + uy * (r * 0.5);
+      var rot2 = Math.atan2(uy, ux) * 180 / Math.PI;
+      if(rot2 > 90) rot2 -= 180;
+      if(rot2 < -90) rot2 += 180;
+      h += dimTextSvg(lx2, ly2, 'R ' + r.toFixed(1), fs, col, rot2);
+    }
+    return h;
+  }
+
+  /* ─── Угол ─── */
+  if(d.dimType === 'angle'){
+    if(!d.p2 || !d.p3) return '';
+    var vx = d.p1.x, vy = d.p1.y;
+    var a1 = Math.atan2(d.p2.y - vy, d.p2.x - vx);
+    var a2 = Math.atan2(d.p3.y - vy, d.p3.x - vx);
+    var rArc = Math.max(8, Math.abs(+d.offset) || 40);
+    var sweep = a2 - a1;
+    while(sweep >  Math.PI) sweep -= 2 * Math.PI;
+    while(sweep < -Math.PI) sweep += 2 * Math.PI;
+    var sX = vx + Math.cos(a1) * rArc, sY = vy + Math.sin(a1) * rArc;
+    var eX = vx + Math.cos(a2) * rArc, eY = vy + Math.sin(a2) * rArc;
+    var largeArc = Math.abs(sweep) > Math.PI ? 1 : 0;
+    var sweepFlag = sweep > 0 ? 1 : 0;
+    h += '<path d="M '+sX+' '+sY+' A '+rArc+' '+rArc+' 0 '+largeArc+' '+sweepFlag+' '+eX+' '+eY+'" fill="none" stroke="'+col+'" stroke-width="'+sw+'"/>';
+    var t1x = -Math.sin(a1) * (sweep > 0 ? -1 : 1);
+    var t1y =  Math.cos(a1) * (sweep > 0 ? -1 : 1);
+    var t2x = -Math.sin(a2) * (sweep > 0 ? 1 : -1);
+    var t2y =  Math.cos(a2) * (sweep > 0 ? 1 : -1);
+    h += dimArrowHead(sX, sY, t1x, t1y, 3, 1.1, col);
+    h += dimArrowHead(eX, eY, t2x, t2y, 3, 1.1, col);
+    var midA = a1 + sweep / 2;
+    var lx3 = vx + Math.cos(midA) * (rArc + fs * 1.2);
+    var ly3 = vy + Math.sin(midA) * (rArc + fs * 1.2);
+    h += dimTextSvg(lx3, ly3, (Math.abs(sweep) * 180 / Math.PI).toFixed(1) + '°', fs, col, 0);
+    return h;
+  }
+
+  /* ─── Линейные: h / v / aligned ─── */
+  var p1 = d.p1, p2 = d.p2;
+  if(!p1 || !p2) return '';
+  var off = +d.offset || 40;
+  var overhang = Math.sign(off) * 2;
+
+  var lx1, ly1, lx2, ly2;
+  var e1x1, e1y1, e1x2, e1y2;
+  var e2x1, e2y1, e2x2, e2y2;
+  var textRot = 0;
+  var measure = 0;
+
+  if(d.dimType === 'h'){
+    var yL = p1.y + off;
+    lx1 = Math.min(p1.x, p2.x); ly1 = yL;
+    lx2 = Math.max(p1.x, p2.x); ly2 = yL;
+    e1x1 = p1.x; e1y1 = p1.y;
+    e1x2 = p1.x; e1y2 = yL + overhang;
+    e2x1 = p2.x; e2y1 = p2.y;
+    e2x2 = p2.x; e2y2 = yL + overhang;
+    measure = Math.abs(p2.x - p1.x);
+    textRot = 0;
+  } else if(d.dimType === 'v'){
+    var xL = p1.x + off;
+    lx1 = xL; ly1 = Math.min(p1.y, p2.y);
+    lx2 = xL; ly2 = Math.max(p1.y, p2.y);
+    e1x1 = p1.x; e1y1 = p1.y;
+    e1x2 = xL + overhang; e1y2 = p1.y;
+    e2x1 = p2.x; e2y1 = p2.y;
+    e2x2 = xL + overhang; e2y2 = p2.y;
+    measure = Math.abs(p2.y - p1.y);
+    textRot = -90;
+  } else {
+    var ddx = p2.x - p1.x, ddy = p2.y - p1.y;
+    var Lp = Math.hypot(ddx, ddy) || 1;
+    var nx = -ddy / Lp, ny = ddx / Lp;
+    var ax = p1.x + nx * off, ay = p1.y + ny * off;
+    var bx = p2.x + nx * off, by = p2.y + ny * off;
+    lx1 = ax; ly1 = ay;
+    lx2 = bx; ly2 = by;
+    var oh = Math.sign(off) * 2;
+    e1x1 = p1.x; e1y1 = p1.y;
+    e1x2 = ax + nx * oh; e1y2 = ay + ny * oh;
+    e2x1 = p2.x; e2y1 = p2.y;
+    e2x2 = bx + nx * oh; e2y2 = by + ny * oh;
+    measure = Lp;
+    textRot = Math.atan2(ddy, ddx) * 180 / Math.PI;
+    if(textRot > 90) textRot -= 180;
+    if(textRot < -90) textRot += 180;
+  }
+
+  h += '<line x1="'+e1x1+'" y1="'+e1y1+'" x2="'+e1x2+'" y2="'+e1y2+'" stroke="'+col+'" stroke-width="'+sw+'"/>';
+  h += '<line x1="'+e2x1+'" y1="'+e2y1+'" x2="'+e2x2+'" y2="'+e2y2+'" stroke="'+col+'" stroke-width="'+sw+'"/>';
+  h += '<line x1="'+lx1+'" y1="'+ly1+'" x2="'+lx2+'" y2="'+ly2+'" stroke="'+col+'" stroke-width="'+sw+'"/>';
+
+  var dL = Math.hypot(lx2 - lx1, ly2 - ly1) || 1;
+  var uxa = (lx2 - lx1) / dL, uya = (ly2 - ly1) / dL;
+  var aLen2 = Math.min(5, dL * 0.3);
+  var aW2   = aLen2 * 0.35;
+  h += dimArrowHead(lx1, ly1, -uxa, -uya, aLen2, aW2, col);
+  h += dimArrowHead(lx2, ly2,  uxa,  uya, aLen2, aW2, col);
+
+  var midX = (lx1 + lx2) / 2;
+  var midY = (ly1 + ly2) / 2;
+  h += dimTextSvg(midX, midY, d.textOverride || measure.toFixed(1), fs, col, textRot);
+  return h;
+}
+
+function renderDimensions(){
+  if(!dimsLayer) return;
+  if(!showDimensions){ dimsLayer.innerHTML = ''; return; }
+  var h = '';
+  for(var i = 0; i < dimensions.length; i++){
+    var d = dimensions[i];
+    if(d.visible === false) continue;
+    h += renderDimensionSvg(d);
+  }
+  dimsLayer.innerHTML = h;
+}
 function reverseObject(o){
 if(o.type==='group'){ groupChildren(o).forEach(function(c){reverseObject(c);}); return; }
 if(!o.points) return;
@@ -7054,6 +7310,189 @@ function eraserCardHTML(){
           : '<b>Между линиями</b> — клик по линии удаляет участок <b>между двумя</b> ближайшими пересечениями, охватывающими точку клика. Если пересечений нет — работает как «Сегмент».')
        + '</div></div>';
 }
+function dimensionCardHTML(){
+  if(tool !== 'dimension') return '';
+  var cur = dimensionState.type;
+  return '<div class="card card-hero" id="dimensionCard">'
+       + '<div class="card-h"><span>Размер</span><span class="note">ГОСТ 2.307</span></div>'
+       + '<div class="fld"><label>Тип размера</label>'
+       + '<div class="calc-seg dim-seg" id="dimTypeSeg">'
+       +   '<button data-v="h"'        +(cur==='h'       ?' class="on"':'')+' title="Горизонтальный">'+dimTypeIcon('h')+'</button>'
+       +   '<button data-v="v"'        +(cur==='v'       ?' class="on"':'')+' title="Вертикальный">'+dimTypeIcon('v')+'</button>'
+       +   '<button data-v="aligned"'  +(cur==='aligned' ?' class="on"':'')+' title="Параллельный">'+dimTypeIcon('aligned')+'</button>'
+       +   '<button data-v="angle"'    +(cur==='angle'   ?' class="on"':'')+' title="Угловой">'+dimTypeIcon('angle')+'</button>'
+       +   '<button data-v="radius"'   +(cur==='radius'  ?' class="on"':'')+' title="Радиус">'+dimTypeIcon('radius')+'</button>'
+       +   '<button data-v="diameter"' +(cur==='diameter'?' class="on"':'')+' title="Диаметр">'+dimTypeIcon('diameter')+'</button>'
+       + '</div></div>'
+       + '<div class="fld"><label>Высота шрифта, мм</label>'
+       + '<input type="number" step="0.5" min="1" max="20" class="inp mono" id="dimFontSize" value="'+dimensionState.fontSize+'">'
+       + '</div>'
+       + '<label class="srow"><span class="stxt">Показывать все размеры</span>'
+       + '<span class="sw"><input type="checkbox" id="dimShowAll"'+(showDimensions?' checked':'')+'><i></i></span></label>'
+       + '<div class="btnrow"><button class="btn" id="dimClearAll">'+icon('trash',14)+' Удалить все размеры</button></div>'
+       + '<div class="hint" id="dimCardHint">'+dimTypeHint()+'</div>'
+       + '</div>';
+}
+
+function dimTypeIcon(t){
+  var s = 18;
+  var paths = {
+    h:        '<path d="M4 9v6M20 9v6M4 12h16"/><path d="M6.5 10 4 12l2.5 2M17.5 10 20 12l-2.5 2"/>',
+    v:        '<path d="M9 4h6M9 20h6M12 4v16"/><path d="M10 6.5 12 4l2 2.5M10 17.5 12 20l2-2.5"/>',
+    aligned:  '<path d="M6 18 18 6"/><path d="M4 15v5h5M20 9V4h-5"/>',
+    angle:    '<path d="M4 20h16M4 20 18 4"/>',
+    radius:   '<circle cx="11" cy="13" r="6.5"/><path d="M11 13l6.5-6.5M17.5 6.5 15 6M17.5 6.5 17 9"/>',
+    diameter: '<circle cx="12" cy="12" r="8"/><path d="M6 6l12 12"/>'
+  };
+  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(paths[t]||'')+'</svg>';
+}
+
+function dimTypeHint(){
+  var t = dimensionState.type;
+  if(t === 'radius' || t === 'diameter') return 'Кликните по окружности или дуге — размер создастся автоматически.';
+  if(t === 'angle')   return '1) клик — вершина · 2) клик — 1-й луч · 3) клик — 2-й луч.';
+  return '1) клик — 1-я точка · 2) клик — 2-я точка · 3) клик — положение размерной линии.';
+}
+
+function bindDimensionCardUI(){
+  var seg = $('#dimTypeSeg');
+  if(seg){
+    seg.onclick = function(e){
+      var btn = e.target.closest('button[data-v]');
+      if(!btn) return;
+      dimensionState.type = btn.dataset.v;
+      dimDraft = null;
+      renderProps();
+      renderOverlay();
+      renderHint();
+      scheduleSave();
+    };
+  }
+  var fsi = $('#dimFontSize');
+  if(fsi){
+    fsi.onchange = function(){
+      var v = parseFloat(fsi.value);
+      if(v > 0 && v <= 20){ dimensionState.fontSize = v; renderDimensions(); scheduleSave(); }
+      else fsi.value = dimensionState.fontSize;
+    };
+  }
+  var sAll = $('#dimShowAll');
+if(sAll){
+  sAll.onchange = function(){
+    showDimensions = !!sAll.checked;
+    var rp = $('#btnShowDims');
+    if(rp){ rp.classList.toggle('rp-on', showDimensions); rp.setAttribute('data-tip', showDimensions?'Скрыть все размеры':'Показать все размеры'); }
+    var swD = $('#swGridDims'); if(swD) swD.checked = showDimensions;
+    renderDimensions();
+    scheduleSave();
+  };
+}
+  var clr = $('#dimClearAll');
+  if(clr){
+    clr.onclick = function(){
+      if(!dimensions.length){ toast('Размеров нет'); return; }
+      uiConfirm('Удалить все размеры?', 'Будет удалено ' + dimensions.length + ' шт.', 'Удалить', true).then(function(ok){
+        if(!ok) return;
+        pushHistory();
+        dimensions = [];
+        renderDimensions();
+        scheduleSave();
+        toast('Размеры удалены', 'trash');
+      });
+    };
+  }
+}
+function dimensionCardHTML(){
+  if(tool !== 'dimension') return '';
+  var cur = dimensionState.type;
+  return '<div class="card card-hero" id="dimensionCard">'
+       + '<div class="card-h"><span>Размер</span><span class="note">ГОСТ 2.307</span></div>'
+       + '<div class="fld"><label>Тип размера</label>'
+       + '<div class="calc-seg dim-seg" id="dimTypeSeg">'
+       +   '<button data-v="h"'        +(cur==='h'       ?' class="on"':'')+' title="Горизонтальный">'+dimTypeIcon('h')+'</button>'
+       +   '<button data-v="v"'        +(cur==='v'       ?' class="on"':'')+' title="Вертикальный">'+dimTypeIcon('v')+'</button>'
+       +   '<button data-v="aligned"'  +(cur==='aligned' ?' class="on"':'')+' title="Параллельный">'+dimTypeIcon('aligned')+'</button>'
+       +   '<button data-v="angle"'    +(cur==='angle'   ?' class="on"':'')+' title="Угловой">'+dimTypeIcon('angle')+'</button>'
+       +   '<button data-v="radius"'   +(cur==='radius'  ?' class="on"':'')+' title="Радиус">'+dimTypeIcon('radius')+'</button>'
+       +   '<button data-v="diameter"' +(cur==='diameter'?' class="on"':'')+' title="Диаметр">'+dimTypeIcon('diameter')+'</button>'
+       + '</div></div>'
+       + '<div class="fld"><label>Высота шрифта, мм</label>'
+       + '<input type="number" step="0.5" min="1" max="20" class="inp mono" id="dimFontSize" value="'+dimensionState.fontSize+'">'
+       + '</div>'
+       + '<label class="srow"><span class="stxt">Показывать все размеры</span>'
+       + '<span class="sw"><input type="checkbox" id="dimShowAll"'+(showDimensions?' checked':'')+'><i></i></span></label>'
+       + '<div class="btnrow"><button class="btn" id="dimClearAll">'+icon('trash',14)+' Удалить все размеры</button></div>'
+       + '<div class="hint">'+dimTypeHint()+'</div>'
+       + '</div>';
+}
+
+function dimTypeIcon(t){
+  var s = 18;
+  var paths = {
+    h:        '<path d="M4 9v6M20 9v6M4 12h16"/><path d="M6.5 10 4 12l2.5 2M17.5 10 20 12l-2.5 2"/>',
+    v:        '<path d="M9 4h6M9 20h6M12 4v16"/><path d="M10 6.5 12 4l2 2.5M10 17.5 12 20l2-2.5"/>',
+    aligned:  '<path d="M6 18 18 6"/><path d="M4 15v5h5M20 9V4h-5"/>',
+    angle:    '<path d="M4 20h16M4 20 18 4"/>',
+    radius:   '<circle cx="11" cy="13" r="6.5"/><path d="M11 13l6.5-6.5M17.5 6.5 15 6M17.5 6.5 17 9"/>',
+    diameter: '<circle cx="12" cy="12" r="8"/><path d="M6 6l12 12"/>'
+  };
+  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(paths[t]||'')+'</svg>';
+}
+
+function dimTypeHint(){
+  var t = dimensionState.type;
+  if(t === 'radius' || t === 'diameter') return 'Кликните по окружности или дуге — размер создастся автоматически.';
+  if(t === 'angle')   return '1) клик — вершина · 2) клик — 1-й луч · 3) клик — 2-й луч.';
+  return '1) клик — 1-я точка · 2) клик — 2-я точка · 3) клик — положение размерной линии.';
+}
+
+function bindDimensionCardUI(){
+  var seg = $('#dimTypeSeg');
+  if(seg){
+    seg.onclick = function(e){
+      var btn = e.target.closest('button[data-v]');
+      if(!btn) return;
+      dimensionState.type = btn.dataset.v;
+      dimDraft = null;
+      renderProps();
+      renderOverlay();
+      renderHint();
+      scheduleSave();
+    };
+  }
+  var fsi = $('#dimFontSize');
+  if(fsi){
+    fsi.onchange = function(){
+      var v = parseFloat(fsi.value);
+      if(v > 0 && v <= 20){ dimensionState.fontSize = v; renderDimensions(); scheduleSave(); }
+      else fsi.value = dimensionState.fontSize;
+    };
+  }
+  var sAll = $('#dimShowAll');
+  if(sAll){
+    sAll.onchange = function(){
+      showDimensions = !!sAll.checked;
+      var rp = $('#btnShowDims');
+      if(rp){ rp.classList.toggle('rp-on', showDimensions); rp.setAttribute('data-tip', showDimensions?'Скрыть все размеры':'Показать все размеры'); }
+      renderDimensions();
+      scheduleSave();
+    };
+  }
+  var clr = $('#dimClearAll');
+  if(clr){
+    clr.onclick = function(){
+      if(!dimensions.length){ toast('Размеров нет'); return; }
+      uiConfirm('Удалить все размеры?', 'Будет удалено ' + dimensions.length + ' шт.', 'Удалить', true).then(function(ok){
+        if(!ok) return;
+        pushHistory();
+        dimensions = [];
+        renderDimensions();
+        scheduleSave();
+        toast('Размеры удалены', 'trash');
+      });
+    };
+  }
+}
 function bindEraserCardUI(){
   var segE = $('#eraserModeSeg');
   if(!segE) return;
@@ -7099,7 +7538,7 @@ var sel=selected();
    в самом верху панели «Объект» во всех ветках — это гарантирует,
    что при активации инструмента карточка не «прыгает» по вкладке
    и не исчезает при смене выделения. */
-var topCards = polyCardHTML() + eraserCardHTML();
+var topCards = polyCardHTML() + eraserCardHTML() + dimensionCardHTML();
 
 if(!sel.length){
 box.innerHTML=topCards+
@@ -7464,7 +7903,7 @@ if(tool==='array'){
 }
 bindEraserCardUI();
 }
-function renderProps(){ renderPropsInner(); bindPolyCard(); bindEraserCardUI(); }
+function renderProps(){ renderPropsInner(); bindPolyCard(); bindEraserCardUI(); bindDimensionCardUI(); }
 function transformObjectScale(o,b,sx,sy){
 if(o.type==='group'){ groupChildren(o).forEach(function(c){transformObjectScale(c,b,sx,sy);}); return; }
 if(!o.points) return;
@@ -7517,10 +7956,24 @@ function renderHint(){
       ? 'Дуга: клик — начальная точка · Shift — угол 15° · ПКМ/Esc — отмена'
       : 'Дуга: клик — конечная точка · Shift — угол 15° · ПКМ/Esc — отмена';
   } else if(pen){
-    txt='Рисуем контур: точек '+pen.points.length+'. '+HINTS.pen;
-  } else {
-    txt=HINTS[tool]||'';
-  }
+txt='Рисуем контур: точек '+pen.points.length+'. '+HINTS.pen;
+} else if(tool==='dimension'){
+  var _dt = dimensionState.type;
+  if(_dt === 'radius' || _dt === 'diameter')
+    txt = 'Размер: кликните по окружности или дуге';
+  else if(_dt === 'angle')
+    txt = dimDraft
+        ? (dimDraft.phase === 1 ? 'Угол: 2-й клик — 1-й луч' : 'Угол: 3-й клик — 2-й луч')
+        : 'Угол: 1-й клик — вершина';
+  else if(dimDraft)
+    txt = dimDraft.phase === 1
+        ? 'Размер: 2-й клик — вторая точка'
+        : 'Размер: 3-й клик — положение размерной линии';
+  else
+    txt = 'Размер: 1-й клик — первая точка (магнитится к геометрии)';
+} else {
+txt=HINTS[tool]||'';
+}
   if(solidMode()&&tool==='select') txt+=' · ISO 3D: тела толщиной '+isoThickness+' мм';
 
   /* Если текст не изменился — не перезапускаем анимацию */
@@ -7570,9 +8023,9 @@ function renderHint(){
 function afterChange(){
   if(typeof projMarkDirty === 'function') projMarkDirty();
   renderObjects(); renderOverlay(); renderPanels(); renderHint();
+  renderDimensions();
   renderGuides();
   scheduleGcode(); scheduleSave();
-
 }
 var scheduleGcode=debounce(function(){generateGcode();renderCamPreview();renderToolpath();simInvalidate();},250);
 var saveStateT=null;
@@ -8650,6 +9103,85 @@ if(tool === 'select'){
 }
 
 var wSnap=snapAll(w,null);
+if(tool==='dimension'){
+  /* Радиус / диаметр: 1 клик по окружности */
+  if(dimensionState.type === 'radius' || dimensionState.type === 'diameter'){
+    var circ = rulerCircleAt(w);
+    if(!circ){ toast('Кликните по окружности или дуге'); return; }
+    pushHistory();
+    dimensions.push({
+      id: uid(), type: 'dimension',
+      dimType: dimensionState.type,
+      p1: {x: circ.an.cx, y: circ.an.cy},
+      p2: {x: circ.an.cx + circ.an.r, y: circ.an.cy},
+      r: circ.an.r,
+      offset: 20, fontSize: dimensionState.fontSize,
+      visible: true, color: '#1C1C1E'
+    });
+    afterChange();
+    toast((dimensionState.type === 'radius' ? 'Радиус' : 'Диаметр') + ' создан', 'ruler');
+    return;
+  }
+  /* Угол: 3 клика */
+  if(dimensionState.type === 'angle'){
+    if(!dimDraft){
+      dimDraft = { dimType:'angle', p1: {x: wSnap.x, y: wSnap.y}, phase: 1 };
+      renderOverlay(); renderHint(); return;
+    }
+    if(dimDraft.phase === 1){
+      dimDraft.p2 = {x: wSnap.x, y: wSnap.y};
+      dimDraft.phase = 2;
+      renderOverlay(); renderHint(); return;
+    }
+    if(dimDraft.phase === 2){
+      dimDraft.p3 = {x: wSnap.x, y: wSnap.y};
+      pushHistory();
+      dimensions.push({
+        id: uid(), type:'dimension', dimType:'angle',
+        p1: dimDraft.p1, p2: dimDraft.p2, p3: dimDraft.p3,
+        offset: 40, fontSize: dimensionState.fontSize,
+        visible: true, color: '#1C1C1E'
+      });
+      dimDraft = null;
+      afterChange();
+      toast('Угловой размер создан', 'ruler');
+      return;
+    }
+  }
+  /* Линейные: 3 клика */
+  if(!dimDraft){
+    dimDraft = { dimType: dimensionState.type, p1: {x: wSnap.x, y: wSnap.y}, phase: 1 };
+    renderOverlay(); renderHint(); return;
+  }
+  if(dimDraft.phase === 1){
+    dimDraft.p2 = {x: wSnap.x, y: wSnap.y};
+    dimDraft.phase = 2;
+    renderOverlay(); renderHint(); return;
+  }
+  if(dimDraft.phase === 2){
+    var p1d = dimDraft.p1, p2d = dimDraft.p2;
+    var off = 40;
+    if(dimDraft.dimType === 'h')      off = w.y - p1d.y;
+    else if(dimDraft.dimType === 'v') off = w.x - p1d.x;
+    else {
+      var ddx = p2d.x - p1d.x, ddy = p2d.y - p1d.y;
+      var Lc = Math.hypot(ddx, ddy) || 1;
+      off = (w.x - p1d.x) * (-ddy / Lc) + (w.y - p1d.y) * (ddx / Lc);
+    }
+    if(Math.abs(off) < 5) off = off < 0 ? -20 : 20;
+    pushHistory();
+    dimensions.push({
+      id: uid(), type:'dimension', dimType: dimDraft.dimType,
+      p1: p1d, p2: p2d,
+      offset: off, fontSize: dimensionState.fontSize,
+      visible: true, color: '#1C1C1E'
+    });
+    dimDraft = null;
+    afterChange();
+    toast('Размер создан', 'ruler');
+    return;
+  }
+}
 if(tool==='knife'){
 var cut=knifeFindCut(w);
 if(!cut){
@@ -8967,6 +9499,7 @@ renderOverlay(); return;
 });
 stage.addEventListener('pointermove',function(e){
 var w=toWorld(e);
+cursorWorld = { x: w.x, y: w.y };
 $('#stCoord').innerHTML='X '+w.x.toFixed(2)+'&ensp;Y <b>'+(-w.y).toFixed(2)+'</b>&ensp;↑';
 
 /* ═══ Перетаскивание направляющей ═══
@@ -9424,7 +9957,7 @@ stage.addEventListener('pointerleave',function(){
   if(guideDrag){ guideDrag = null; renderOverlay(); }
 });
 function hasPendingState(){
-return !!(pen||shapeDraft||polyDraft||arcDraft||joinState||(ruler.pts.length||ruler.info)||knife.a);
+return !!(pen||shapeDraft||polyDraft||arcDraft||joinState||(ruler.pts.length||ruler.info)||knife.a||dimDraft);
 }
 function cancelPending(){
 if(pen){pen=null;renderOverlay();renderHint();}
@@ -9434,7 +9967,9 @@ if(arcDraft){arcDraft=null;renderOverlay();renderHint();toast('Дуга: соз�
 if(joinState){joinState=null;renderOverlay();toast('Смыкание отменено');}
 if(ruler.pts.length||ruler.info){rulerReset();renderOverlay();toast('Линейка: измерение сброшено');}
 if(knife.a){knifeReset();selection=[];renderObjects();renderOverlay();renderPanels();toast('Нож: операция отменена');}
+if(dimDraft){ dimDraft=null; renderOverlay(); renderHint(); toast('Размер: отменено'); }
 }
+
 function finishPen(closed){
 if(!pen) return;
 var pts=pen.points;
@@ -9619,7 +10154,8 @@ var TOOLS=[
 {id:'offset',   icon:'offset',      name:'Отступ',                            key:'U'},
 {id:'start',    icon:'flag',        name:'Начальная точка',                   key:'S'},
 {id:'revdir',   icon:'reverse',     name:'Развернуть вектор',                 key:'I'},
-{id:'ruler',    icon:'ruler',       name:'Линейка — измерения',               key:'Q'}
+{id:'ruler',    icon:'ruler',       name:'Линейка — измерения',               key:'Q'},
+{id:'dimension',icon:'dimension',   name:'Размер (ГОСТ 2.307)',               key:'⇧D'}
 ];
 function fitOnePanel(panel,maxSize,minSize){
 if(!panel) return;
@@ -9675,7 +10211,7 @@ rpAlignCenterH:'alignCenterH',rpAlignCenterV:'alignCenterV',rpDistH:'distributeH
 rpUnion:'merge',rpDiff:'subtract',rpIntersect:'intersect',
 rpNest:'nesting',btnGroup:'layers',btnUngroup:'layers',
 rpFront:'bringF',rpBack:'sendB',rpReverse:'reverse',rpMirror:'mirrorAxis',rpLinearize:'linearize',
-btnShowToolpath:'play',btnShowNumbers:'numbers'};
+btnShowToolpath:'play',btnShowNumbers:'numbers',btnShowDims:'dimension'};
 for(var id in m){ var el=$('#'+id); if(el) el.innerHTML=icon(m[id],19); }
 $('#rpAlignLeft').onclick=function(){alignObjects('left');};
 $('#rpAlignRight').onclick=function(){alignObjects('right');};
@@ -9710,7 +10246,16 @@ gset.showTool=!gset.showTool;
 var cb=$('#cShow'); if(cb) cb.checked=gset.showTool;
 renderToolpath(); updateToolpathBtn(); scheduleSave();
 };
-$('#btnShowNumbers').onclick=toggleNumbers;
+$('#btnShowDims').onclick=function(){
+  showDimensions=!showDimensions;
+  this.classList.toggle('rp-on',showDimensions);
+  this.setAttribute('data-tip',showDimensions?'Скрыть все размеры':'Показать все размеры');
+  var cb=$('#dimShowAll'); if(cb) cb.checked=showDimensions;
+  var swD=$('#swGridDims'); if(swD) swD.checked=showDimensions;
+  renderDimensions();
+  scheduleSave();
+  toast(showDimensions?'Размеры показаны':'Размеры скрыты','ruler');
+};
 
 updateToolpathBtn(); updateNumbersBtn(); updateViewToggles();
 }
@@ -9722,6 +10267,7 @@ if(t!=='ruler'){ rulerReset(); ruler.hover=null; }
 if(t!=='poly'&&polyDraft){ polyDraft=null; }
 if(t!=='arc'&&arcDraft){ arcDraft=null; }
 if(t!=='knife'&&knife.a){ knifeReset(); selection=[]; }
+if(t!=='dimension'&&dimDraft){ dimDraft=null; }
 tool=t; nodeSel.clear();
 wrap.dataset.tool=t;
 $$('.tool-btn').forEach(function(b){b.classList.remove('active');});
@@ -9942,9 +10488,15 @@ function exportSvgFile(fileName){
     if(!vis.length){ toast('Нет видимых объектов'); return false; }
     var bb=selBBox(vis), pad=2;
     var body=vis.map(function(o){
-        var dash=o.cut===false?' stroke-dasharray="4 2 1 2"':'';
-        return '  <path d="'+pathD(o)+'" fill="none" stroke="#000" stroke-width="0.1"'+dash+'/>';
-    }).join('\n');
+    var dash=o.cut===false?' stroke-dasharray="4 2 1 2"':'';
+    return '  <path d="'+pathD(o)+'" fill="none" stroke="#000" stroke-width="0.1"'+dash+'/>';
+}).join('\n');
+if(showDimensions && dimensions.length){
+  var dimsSvg = dimensions.filter(function(d){ return d.visible !== false; })
+                         .map(function(d){ return '  ' + renderDimensionSvg(d); })
+                         .join('\n');
+  if(dimsSvg) body += '\n' + dimsSvg;
+}
     var svg='<?xml version="1.0" encoding="UTF-8"?>\n'+
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="'+(bb.x-pad)+' '+(bb.y-pad)+' '+(bb.w+pad*2)+' '+(bb.h+pad*2)+'" width="'+(bb.w+pad*2)+'mm" height="'+(bb.h+pad*2)+'mm">\n'+
     body+'\n</svg>';
@@ -10699,6 +11251,7 @@ function bindGridPopover(){
 
   var swShow = $('#swGridShow');
   var swSnap = $('#swGridSnap');
+  var swDims = $('#swGridDims');
   
   var inpG   = $('#inpGrid');
   var inpS   = $('#inpMoveStep');
@@ -10715,6 +11268,18 @@ function bindGridPopover(){
     grid.snap = swSnap.checked;
     updateStatusChips();
     scheduleSave();
+  };
+  if(swDims) swDims.onchange = function(){
+    showDimensions = swDims.checked;
+    var rp = $('#btnShowDims');
+    if(rp){
+      rp.classList.toggle('rp-on', showDimensions);
+      rp.setAttribute('data-tip', showDimensions ? 'Скрыть все размеры' : 'Показать все размеры');
+    }
+    var cardCb = $('#dimShowAll'); if(cardCb) cardCb.checked = showDimensions;
+    renderDimensions();
+    scheduleSave();
+    toast(showDimensions ? 'Размеры показаны' : 'Размеры скрыты', 'ruler');
   };
  
   if(inpG) inpG.onchange = function(){
@@ -10753,6 +11318,7 @@ function updateStatusChips(){
   }
   var swS = $('#swGridShow'); if(swS) swS.checked = !!grid.show;
   var swN = $('#swGridSnap'); if(swN) swN.checked = !!grid.snap;
+  var swD = $('#swGridDims'); if(swD) swD.checked = !!showDimensions;
   var ig  = $('#inpGrid');    if(ig)  ig.value = grid.size;
   var im  = $('#inpMoveStep');if(im)  im.value = moveStep;
 }
@@ -10776,9 +11342,10 @@ function buildStatus(){
     else e.target.value=isoThickness;
   };
 
-  /* Иконки в строках gridPop */
+   /* Иконки в строках gridPop */
   var iShow = $('#gridRowIconShow'); if(iShow) iShow.innerHTML = icon('grid',14);
   var iSnap = $('#gridRowIconSnap'); if(iSnap) iSnap.innerHTML = icon('magnet',14);
+  var iDims = $('#gridRowIconDims'); if(iDims) iDims.innerHTML = icon('dimension',14);
   
 
   /* Первичная синхронизация обоих popover'ов */
@@ -10847,6 +11414,7 @@ afterChange();
 return;
 }
 if(e.shiftKey && k==='n'){ e.preventDefault(); openNestPanelAndFocus(); nestStart(); return; }
+if(e.shiftKey && k==='d'){ e.preventDefault(); setTool('dimension'); return; }
 if(e.shiftKey && k==='a'){ e.preventDefault(); setTool('array'); return; }
 if(e.shiftKey && k==='m'){ e.preventDefault(); mirrorSelectionVertical(); return; }
 if(e.ctrlKey||e.metaKey){
