@@ -8871,12 +8871,11 @@ var w=toWorld(e);
 
 /* ═══ Завершение перетаскивания направляющей ═══ */
 if(guideDrag){
-  if(guideDrag.moved){
-    renderGuides();
-    renderOverlay();
-    scheduleSave();
-  }
+  var wasMoved = guideDrag.moved;
   guideDrag = null;
+  renderGuides();
+  renderOverlay();
+  if(wasMoved) scheduleSave();
   return;
 }
 
