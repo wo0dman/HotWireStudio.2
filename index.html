@@ -4247,8 +4247,76 @@ result.push(rg&&rg.visible?rg:o);
 }
 return result;
 }
+/* Универсальный выбор объекта кликом — для инструментов,
+   работающих с уже существующими фигурами (offset, array, node и др.).
+   Обычный клик — выделить; Shift+клик — добавить/убрать из выделения.
+   Возвращает true, если клик попал по объекту. */
+function trySelectObject(w, e){
+  var hit = topObjectAt(w);
+  if(!hit) return false;
+  if(e && e.shiftKey){
+    if(selection.indexOf(hit.id) !== -1){
+      selection = selection.filter(function(id){ return id !== hit.id; });
+    } else {
+      selection.push(hit.id);
+    }
+  } else {
+    selection = [hit.id];
+  }
+  nodeSel.clear();
+  afterChange();
+  return true;
+}
 function bboxInsideRect(bm,rx,ry,rw,rh){return bm.x>=rx&&bm.x+bm.w<=rx+rw&&bm.y>=ry&&bm.y+bm.h<=ry+rh;}
 function bboxIntersectsRect(bm,rx,ry,rw,rh){return bm.x<rx+rw&&bm.x+bm.w>rx&&bm.y<ry+rh&&bm.y+bm.h>ry;}
+
+/* Пересечение РЕАЛЬНОГО контура объекта с прямоугольником рамки.
+   Используется при выборе «справа налево» (красная рамка) —
+   рамка должна касаться самих линий, а не габарита.
+   Возвращает true, если:
+     • хотя бы одна вершина контура внутри рамки,
+     • рамка целиком внутри замкнутого контура,
+     • хотя бы одно ребро контура пересекает/касается стороны рамки. */
+function contourIntersectsRect(o, rx, ry, rw, rh){
+  if(!o.points || o.points.length < 2) return false;
+  var poly = objectToPoly(o, 0.2);
+  if(!poly || !poly.pts || poly.pts.length < 2) return false;
+  var pts = poly.pts;
+  var n = pts.length;
+  var closed = !!poly.closed;
+  var rr = rx + rw, rb = ry + rh;
+
+  /* 1) вершина контура внутри рамки */
+  for(var i = 0; i < n; i++){
+    var p = pts[i];
+    if(p.x >= rx && p.x <= rr && p.y >= ry && p.y <= rb) return true;
+  }
+  /* 2) замкнутый контур: если рамка целиком внутри объекта — тоже захват */
+  if(closed){
+    if(pointInPoly({x:rx, y:ry}, pts)) return true;
+    if(pointInPoly({x:rr, y:ry}, pts)) return true;
+    if(pointInPoly({x:rr, y:rb}, pts)) return true;
+    if(pointInPoly({x:rx, y:rb}, pts)) return true;
+  }
+  /* 3) пересечение/касание рёбер контура со сторонами рамки */
+  var topA = {x:rx, y:ry}, topB = {x:rr, y:ry};
+  var botA = {x:rx, y:rb}, botB = {x:rr, y:rb};
+  var lefA = {x:rx, y:ry}, lefB = {x:rx, y:rb};
+  var rigA = {x:rr, y:ry}, rigB = {x:rr, y:rb};
+  var lim = closed ? n : n - 1;
+  for(var k = 0; k < lim; k++){
+    var a = pts[k], b = pts[(k+1) % n];
+    var ipT = lineInter(a, b, topA, topB);
+    if(ipT && osnapPointOnSeg(ipT, a, b) && osnapPointOnSeg(ipT, topA, topB)) return true;
+    var ipB = lineInter(a, b, botA, botB);
+    if(ipB && osnapPointOnSeg(ipB, a, b) && osnapPointOnSeg(ipB, botA, botB)) return true;
+    var ipL = lineInter(a, b, lefA, lefB);
+    if(ipL && osnapPointOnSeg(ipL, a, b) && osnapPointOnSeg(ipL, lefA, lefB)) return true;
+    var ipR = lineInter(a, b, rigA, rigB);
+    if(ipR && osnapPointOnSeg(ipR, a, b) && osnapPointOnSeg(ipR, rigA, rigB)) return true;
+  }
+  return false;
+}
 /* ═══════════════ БУЛЕВЫ (Greiner–Hormann) ═══════════════ */
 function polyArea(p){var a=0;for(var i=0;i<p.length;i++){var j=(i+1)%p.length;a+=p[i].x*p[j].y-p[j].x*p[i].y;}return a/2;}
 function ghVertex(x,y){return{x:x,y:y,next:null,prev:null,intersect:false,entry:false,neighbor:null,alpha:0,visited:false};}
@@ -7007,11 +7075,13 @@ if(tool==='offset'){
   extra += fld('Расстояние, мм',
     '<input type="number" step="0.1" min="0.01" class="inp mono" id="offsetDist" value="'+st.dist+'">');
 
-  extra += fld('Направление',
-    '<select class="inp" id="offsetDir">'
-    + '<option value="outside"'+(st.dir==='outside'?' selected':'')+'>Внешний</option>'
-    + '<option value="inside"'+(st.dir==='inside'?' selected':'')+'>Внутренний</option>'
-    + '</select>');
+    var isOutside = st.dir === 'outside';
+  var isInside  = st.dir === 'inside';
+  extra += '<div class="fld"><label>Направление</label>'
+        +  '<div class="calc-seg" id="offsetDirSeg">'
+        +    '<button data-v="outside"'+(isOutside?' class="on"':'')+'>Внешний</button>'
+        +    '<button data-v="inside"' +(isInside ?' class="on"':'')+'>Внутренний</button>'
+        +  '</div></div>';
 
   extra += '<div class="fld"><label>Тип углового соединения</label>'
         +  '<div class="calc-seg" id="offsetJointSeg">'
@@ -7137,7 +7207,15 @@ if(tool==='offset'){
     if(v > 0){ offsetState.dist = v; renderOverlay(); scheduleSave(); }
   };
 
-  var elDir = $('#offsetDir');
+   var segD = $('#offsetDirSeg');
+  if(segD) segD.onclick = function(e){
+    var btn = e.target.closest('button[data-v]');
+    if(!btn) return;
+    offsetState.dir = btn.dataset.v;
+    renderProps();
+    renderOverlay();
+    scheduleSave();
+  }; var elDir = $('#offsetDir');
   if(elDir) elDir.onchange = function(){
     offsetState.dir = elDir.value;
     renderOverlay(); scheduleSave();
@@ -7265,7 +7343,7 @@ ellipse:'Тяните по диагонали габарита · Shift — кр
 poly:'Многоугольник вписан в окружность · Тяните от центра: радиус и ориентация за курсором · Shift — поворот шагом 15° · Клик — многоугольник заданного радиуса · Число углов — в панели справа',
 hand:'Перетаскивание — панорама · Колесо — масштаб · Пробел — временная рука',
 revdir:'Стрелки показывают направление обхода · 2×клик по контуру — развернуть',
-offset:'Параметры — в панели справа · 2×клик по контуру — применить отступ'
+offset:'Клик по фигуре — выделить · Shift+клик — добавить/убрать · Параметры — в панели справа · 2×клик по контуру — применить отступ'
 };
 function renderHint(){
 var txt;
@@ -8536,6 +8614,10 @@ drag.anchorOrig={x:w.x,y:w.y};
 afterChange(); return;
 }
 }
+if(tool==='offset'){
+  trySelectObject(w, e);
+  return;
+}
 if(tool==='eraser'){
   var hit5 = findSegmentHit(w);
   if(!hit5) return;
@@ -8641,7 +8723,11 @@ return;
 }
 if(tool==='array'){
   if(arrayState.mode === 'polar'){
-    /* Клик — задать центр вращения */
+    /* Shift+клик — выделить объект; обычный клик — задать центр вращения */
+    if(e.shiftKey){
+      trySelectObject(w, e);
+      return;
+    }
     var pA = snapAll(w, null);
     arrayState.centerX = pA.x;
     arrayState.centerY = pA.y;
@@ -8650,7 +8736,9 @@ if(tool==='array'){
     scheduleSave();
     toast('Центр массива: X '+r2(pA.x)+' · Y '+r2(-pA.y), 'crosshair');
   } else {
-    toast('Параметры массива — в панели справа. Enter — применить.');
+    if(!trySelectObject(w, e)){
+      toast('Кликните по объекту, чтобы выделить его. Enter — применить массив.');
+    }
   }
   return;
 }
@@ -8909,8 +8997,15 @@ selection=marq.base.slice();
 for(var mi=0;mi<objects.length;mi++){
 var om=objects[mi];
 if(om.type==='group'||!om.visible) continue;
-var bm=objBBox(om);
-var included=(marq.dir==='ltr')?bboxInsideRect(bm,mx,my,mw,mh):bboxIntersectsRect(bm,mx,my,mw,mh);
+var included;
+if(marq.dir==='ltr'){
+  /* слева-направо: полное вхождение габарита в рамку (оставляем как было) */
+  var bm=objBBox(om);
+  included=bboxInsideRect(bm,mx,my,mw,mh);
+} else {
+  /* справа-налево: рамка должна касаться реальных линий контура */
+  included=contourIntersectsRect(om,mx,my,mw,mh);
+}
 if(included){
 var rootId=findRootGroup(om.id);
 var key=(rootId!==null)?rootId:om.id;
