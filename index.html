@@ -3093,9 +3093,9 @@ var res=nest3BLF(r.polys,r.bb,placed,W,H);
 if(!res) continue;
 var cand={angle:angles[ai],mirror:mirror,rot:r,dx:res.dx,dy:res.dy,sheet:si};
 if(!best||res.dy<best.dy-1e-6||(Math.abs(res.dy-best.dy)<=1e-6&&res.dx<best.dx-1e-6)) best=cand;
-        /* Идеальная позиция — угол листа (с учётом отступа md): лучше не будет. */
+               /* Идеальная позиция — угол листа (с учётом отступа md): лучше не будет. */
         var md = nest3CurrentMinDist || 0;
-        if(res.dy<=md-r.bb.y+1e-6 && res.dx<=md-r.bb.x+1e-6) return best;
+        if(res.dy<=md-r.bb.y+1e-6 && res.dx<=md-r.bb.x+1e-6) return cand;
 }
 }
 return best;
@@ -3288,7 +3288,8 @@ function nest3Verify(res,opts){
 }
 
 /* ─── стратегии порядка укладки ─── */
-function nest3MakeOrders(details,restarts){
+function nest3MakeOrders(details,restarts,seedOffset){
+seedOffset = seedOffset || 0;
 function srt(cmp){ return details.slice().sort(cmp); }
 var byArea   = srt(function(a,b){ return b.area-a.area || Math.max(b.bb.w,b.bb.h)-Math.max(a.bb.w,a.bb.h); });
 var byMaxDim = srt(function(a,b){ return Math.max(b.bb.w,b.bb.h)-Math.max(a.bb.w,a.bb.h); });
@@ -3304,7 +3305,7 @@ var base=[byArea,byMaxDim,byBBox,byHeight,byWidth,bySlender];
 var orders=[], n=Math.max(1,restarts);
 for(var i=0;i<n;i++){
 if(i<base.length){ orders.push(base[i]); continue; }
-var rnd=nest3Rng(i*7919+104729);
+var rnd=nest3Rng((i+seedOffset)*7919+104729);
 var src=base[i%base.length].slice();
 var keep=Math.max(1,Math.floor(src.length/3));
 var head=src.slice(0,keep), tail=src.slice(keep);
@@ -3317,8 +3318,8 @@ orders.push(head.concat(tail));
 return orders;
 }
 /* ─── многостадийная оптимизация (асинхронно, с прогрессом и лимитом времени) ─── */
-function nest3Optimize(details,opts,restarts,budget,onProgress,done){
-var orders=nest3MakeOrders(details,restarts);
+function nest3Optimize(details,opts,restarts,budget,onProgress,done,seedOffset){
+var orders=nest3MakeOrders(details,restarts,seedOffset);
 var best=null, ri=0, t0=Date.now();
 function finish(){
 if(best){ try{ nest3Finalize(best,opts); }catch(e){} }
@@ -3530,7 +3531,11 @@ function projOpen(id){
     overlayLayer.style.transition = 'opacity .15s';
     overlayLayer.style.opacity = '0';
   }
-  setTimeout(function(){
+    setTimeout(function(){
+    pen=null; shapeDraft=null; polyDraft=null; arcDraft=null;
+    joinState=null; joinHover=null; knifeReset(); rulerReset();
+    marq=null; drag=null; guideDrag=null; lastSnap=null;
+    eraserHover=null;
     projApplyData(data);
     projState.activeId = id;
     projState.dirty = false;
@@ -3726,7 +3731,7 @@ if(res.unplaced.length) msg+=' · не поместилось '+res.unplaced.len
 nestSetStatus('<b>'+esc(msg)+'</b><br>Проверьте результат и нажмите «Применить» (или «Отменить»). «Ещё вариант» — пересчитать с другим порядком.');
 toast(msg,res.unplaced.length?'close':'check');
 updateNestButtons();
-});
+}, nestRestartOffset);
 },30);
 }
 function nestApply(){
@@ -5268,7 +5273,11 @@ view.y=r.height/2-p.y*view.scale;
 applyView(); updateViewSeg(); updateIsoUI(); renderObjects(); scheduleSave();
 }
 function updateViewSeg(){
-$$('#viewSeg button').forEach(function(b){ b.classList.toggle('on',(b.dataset.v==='iso')===iso); });
+$$('#viewSeg button').forEach(function(b){
+  var isActive = (b.dataset.v==='iso') === iso;
+  b.classList.toggle('on', isActive);
+  b.classList.remove('acc');
+});
 }
 function updateIsoUI(){
 var b3=$('#btnIso3D'), ct=$('#chipThick');
@@ -5579,7 +5588,7 @@ return {cx:ux,cy:uy,r:r};
 function analyzeCircular(o){
 if(!o||o.type==='group'||!o.points) return null;
 var poly=objectToPoly(o,0.05);
-if(!poly||!poly.pts.length<6) { if(!poly||poly.pts.length<6) return null; }
+if(!poly || !poly.pts || poly.pts.length < 6) return null;
 var pts=poly.pts, n=pts.length;
 var i1=0, i2=Math.floor(n/3), i3=Math.floor(2*n/3);
 if(i3>=n) i3=n-1;
@@ -9291,37 +9300,16 @@ $$('.tool-btn').forEach(function(b){b.classList.remove('active');});
 var btn=$('#tool-'+t); if(btn) btn.classList.add('active');
 if(sim.on){ var sb=$('#toolSim'); if(sb) sb.classList.add('active'); }
 renderOverlay(); renderHint(); renderPanels();
-renderOverlay(); renderHint(); renderPanels();
+
 
 /* ═══ Автофокус карточки инструмента ═══
    Если у активированного инструмента есть собственная карточка
    в панели «Объект» — переключаемся на неё, прокручиваем и подсвечиваем.
    Небольшая задержка нужна, чтобы после renderPanels() DOM был готов. */
 if(focusToolCard(t)){
-  /* Если активна вкладка «Слои» или «Станок» — переключаем на «Объект». */
   var activeTab = $('#mainSeg button.on');
-  if(!activeTab || activeTab.dataset.tab !== 'obj'){
-    switchTab('obj');
-    /* switchTab снимает .hidden с pane-obj, даём layout пересчитаться */
-        setTimeout(function(){ focusCardById(
-      t==='poly'?'polyCard':
-      t==='offset'?'offsetCard':
-      t==='array'?'arrayCard':
-      t==='ruler'?'rulerCard':
-      t==='knife'?'knifeCard':
-      t==='eraser'?'eraserCard':null
-    ); }, 80);
-  } else {
-    /* Уже на нужной вкладке — просто ещё раз фокусируем после анимации вкладки. */
-        setTimeout(function(){ focusCardById(
-      t==='poly'?'polyCard':
-      t==='offset'?'offsetCard':
-      t==='array'?'arrayCard':
-      t==='ruler'?'rulerCard':
-      t==='knife'?'knifeCard':
-      t==='eraser'?'eraserCard':null
-    ); }, 40);
-  }
+  if(!activeTab || activeTab.dataset.tab !== 'obj') switchTab('obj');
+  setTimeout(function(){ focusToolCard(t); }, 60);
 }
 }
 function buildTopbar(){
@@ -9946,7 +9934,7 @@ el.innerHTML=cardHTML('Мозаика (nesting)','',
 '<div class="fld" style="padding-top:0"><label>Лимит времени расчёта, с</label><input type="number" min="1" max="300" step="1" class="inp mono" id="nestBudget" value="'+nestState.timeBudget+'"></div>'+
 '<label class="srow"><span class="stxt">Доводка углов</span><span class="sw"><input type="checkbox" id="nestRefine" checked><i></i></span></label>'+
 '<label class="srow"><span class="stxt">Разрешить зеркалирование</span><span class="sw"><input type="checkbox" id="nestMirror"><i></i></span></label>'+
-/*'<div class="nest-chips"><span class="nest-chip" id="nestAngleInfo">—</span><span class="nest-chip" id="nestUnitsChip">деталей: —</span></div>'+*/
+'<div class="nest-chips"><span class="nest-chip" id="nestAngleInfo">—</span><span class="nest-chip" id="nestUnitsChip">деталей: —</span></div>'+
 '<div class="nest-prog" id="nestProgWrap"><div class="nest-prog-bar"><div class="nest-prog-fill" id="nestProgFill"></div></div></div>'+
 '<div class="nest-report" id="nestReport"></div>'+
 '<div class="btnrow" style="padding-top:2px">'+
@@ -9977,11 +9965,15 @@ scheduleSave();
 };
 mi.onchange=function(){ nestState.mirror=!!mi.checked; nestUpdateAngleInfo(); scheduleSave(); };
 rf.onchange=function(){ nestState.refine=!!rf.checked; scheduleSave(); };
-$('#nestBtnStart').onclick=function(){ nestStart(); };
+$('#nestBtnStart').onclick=function(){
+  nestRestartOffset = 0;
+  nestStart();
+};
 $('#nestBtnShuffle').onclick=function(){
-/* «Ещё вариант»: смещаем набор стратегий, сохраняя текущий предпросмотр для отката */
+if(nestBusy){ toast('Идёт расчёт — дождитесь окончания','nesting'); return; }
 nestState.restarts=clamp((parseInt(rs.value,10)||10),1,80);
 nestRestartOffset=(nestRestartOffset||0)+Math.floor(Math.random()*97)+1;
+toast('Пересчёт с новым порядком деталей…','nesting');
 nestStart();
 };
 $('#nestBtnApply').onclick=function(){ nestApply(); };
@@ -10368,7 +10360,7 @@ function buildStatus(){
   $('#btnZoomOut').onclick=function(){zoomCenter(1/1.25);};
   $('#btnZoomIn').onclick=function(){zoomCenter(1.25);};
   $('#btnFit').onclick=fitView;
-  $('#stZoom').onclick=function(){var r=stage.getBoundingClientRect();view.scale=1;view.x=r.width/2;view.y=r.height/2;applyView();};
+  $('#stZoom').onclick=function(){ zoomCenter(1/view.scale); };
 }
 document.addEventListener('keydown',function(e){
 /* Пока открыт калькулятор — не пропускаем никакие хоткеи, только Esc. */
