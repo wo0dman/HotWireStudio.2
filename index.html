@@ -135,6 +135,124 @@ button svg{pointer-events:none;flex:none}
 .card{background:#fff;border-radius:14px;box-shadow:0 .5px 1.5px rgba(0,0,0,.045),0 0 0 .5px rgba(60,60,67,.05);margin-bottom:14px;overflow:hidden}
 .card-h{padding:12px 14px 6px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--label2);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card-h .note{font-family:var(--fm);font-size:10px;font-weight:500;color:var(--label3);letter-spacing:0;text-transform:none}
+/* ═══ Карточки инструментов — синий «hero» в стиле калькулятора ═══ */
+.card.card-hero{
+  background:linear-gradient(135deg,#007AFF 0%,#5856D6 100%);
+  border-radius:14px;
+  box-shadow:0 8px 24px rgba(0,122,255,.22),0 0 0 .5px rgba(0,122,255,.18);
+  color:#fff;
+}
+.card.card-hero .card-h{
+  color:#fff;
+  font-weight:700;
+}
+.card.card-hero .card-h .note{
+  color:rgba(255,255,255,.78);
+}
+.card.card-hero .fld label{
+  color:rgba(255,255,255,.88);
+}
+.card.card-hero .fld label b,
+.card.card-hero .fld label code,
+.card.card-hero .fld label span[style]{
+  color:#fff !important;
+}
+.card.card-hero .hint{
+  color:rgba(255,255,255,.85);
+}
+.card.card-hero .hint b{
+  color:#fff;
+  font-weight:600;
+}
+.card.card-hero .inp{
+  background:rgba(255,255,255,.16);
+  border-color:rgba(255,255,255,.24);
+  color:#fff;
+}
+.card.card-hero .inp::placeholder{
+  color:rgba(255,255,255,.55);
+}
+.card.card-hero .inp:focus{
+  background:rgba(255,255,255,.24);
+  border-color:#fff;
+  box-shadow:0 0 0 3px rgba(255,255,255,.28);
+}
+.card.card-hero select.inp{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%23FFFFFF' fill='none' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.card.card-hero select.inp option{
+  background:#1C1C1E;
+  color:#fff;
+}
+.card.card-hero .btn{
+  background:rgba(255,255,255,.20);
+  color:#fff;
+}
+.card.card-hero .btn:hover{
+  background:rgba(255,255,255,.30);
+}
+.card.card-hero .btn.tint,
+.card.card-hero .btn.fill,
+.card.card-hero .btn.orange{
+  background:#fff;
+  color:#007AFF;
+  font-weight:600;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);
+  filter:none;
+}
+.card.card-hero .btn.tint:hover,
+.card.card-hero .btn.fill:hover,
+.card.card-hero .btn.orange:hover{
+  background:rgba(255,255,255,.92);
+  filter:none;
+}
+.card.card-hero .btn.danger{
+  background:rgba(255,255,255,.18);
+  color:#FFD5D1;
+}
+.card.card-hero .btn.danger:hover{
+  background:rgba(255,255,255,.28);
+}
+.card.card-hero .srow .stxt{
+  color:#fff;
+}
+.card.card-hero .srow .stxt small{
+  color:rgba(255,255,255,.65);
+}
+.card.card-hero .srow+.srow::before,
+.card.card-hero .fld+.srow::before,
+.card.card-hero .srow+.fld::before{
+  background:rgba(255,255,255,.18);
+}
+.card.card-hero .sw i{
+  background:rgba(255,255,255,.30);
+}
+.card.card-hero .sw input:checked+i{
+  background:#fff;
+}
+.card.card-hero .sw input:checked+i::after{
+  background:#007AFF;
+}
+.card.card-hero .calc-seg{
+  background:rgba(255,255,255,.18);
+}
+.card.card-hero .calc-seg button{
+  color:rgba(255,255,255,.85);
+}
+.card.card-hero .calc-seg button:hover{
+  color:#fff;
+}
+.card.card-hero .calc-seg button.on{
+  background:#fff;
+  color:#007AFF;
+  box-shadow:0 1px 4px rgba(0,0,0,.20);
+}
+.card.card-hero .gc-folder-hint{
+  color:rgba(255,255,255,.72);
+}
+.card.card-hero .gc-folder-hint b{
+  color:#fff;
+}
 .fld{padding:7px 14px}
 .fld label{display:block;font-size:11.5px;color:var(--label2);margin-bottom:5px;font-weight:500}
 .inp{width:100%;height:34px;background:#F4F4F8;border:1px solid transparent;border-radius:10px;padding:0 10px;font-size:13px;color:var(--label);outline:none;transition:border-color .15s,box-shadow .15s,background .15s}
@@ -3641,11 +3759,12 @@ function projDuplicate(id){
 function focusToolCard(t){
     var map = {
         poly:   'polyCard',
+        eraser: 'eraserCard',
+        node:   'nodeCard',
         offset: 'offsetCard',
         array:  'arrayCard',
         ruler:  'rulerCard',
-        knife:  'knifeCard',
-        eraser: 'eraserCard'
+        knife:  'knifeCard'
     };
     var id = map[t];
     if(!id) return false;
@@ -6674,7 +6793,7 @@ return '<div class="card"'+(id?' id="'+id+'"':'')+'><div class="card-h"><span>'+
 function fld(label,inner){ return '<div class="fld"><label>'+label+'</label>'+inner+'</div>'; }
 function polyCardHTML(){
 if(tool!=='poly') return '';
-return '<div class="card" id="polyCard"><div class="card-h"><span>Многоугольник</span><span class="note">вписан в окружность</span></div>'+
+return '<div class="card card-hero" id="polyCard"><div class="card-h"><span>Многоугольник</span><span class="note">вписан в окружность</span></div>'+
 '<div class="grid2" style="padding:6px 14px 0">'+
 '<div class="fld" style="padding-left:0"><label>Количество углов (3–64)</label><input type="number" min="3" max="64" step="1" class="inp mono" id="polySides" value="'+polySet.sides+'"></div>'+
 '<div class="fld" style="padding-right:0"><label>Поворот, ° (против ч.)</label><input type="number" step="1" class="inp mono" id="polyRot" value="'+polySet.rot+'"></div>'+
@@ -6689,7 +6808,7 @@ function eraserCardHTML(){
   var isSeg = eraserMode === 'segment';
   var isOne = eraserMode === 'trimOne';
   var isTwo = eraserMode === 'trimTwo';
-  return '<div class="card" id="eraserCard"><div class="card-h">Ножницы</div>'
+  return '<div class="card card-hero" id="eraserCard"><div class="card-h">Ножницы</div>'
        + '<div class="fld"><label>Режим работы</label>'
        + '<div class="calc-seg" id="eraserModeSeg">'
        + '<button data-v="segment"'+(isSeg?' class="on"':'')+'>Сегмент</button>'
@@ -6869,7 +6988,7 @@ PALETTE.map(function(c){return '<div class="swatch '+(o.color===c?'active':'')+'
 var extra='';
 if(tool==='node'&&nodeSel.size===1){
 var idx=[...nodeSel][0], p=o.points[idx];
-extra+='<div class="card" id="nodeCard"><div class="card-h"><span>Узел '+(idx+1)+' из '+o.points.length+'</span><span class="note">точные координаты</span></div>'+
+extra+='<div class="card card-hero" id="nodeCard"><div class="card-h"><span>Узел '+(idx+1)+' из '+o.points.length+'</span><span class="note">точные координаты</span></div>'+
 '<div class="grid2" style="padding:6px 14px 0">'+
 '<div class="fld" style="padding-left:0"><label>X узла, мм</label><input type="number" step="0.1" class="inp mono" id="nX" value="'+r2(p.x)+'"></div>'+
 '<div class="fld" style="padding-right:0"><label>Y узла, мм</label><input type="number" step="0.1" class="inp mono" id="nY" value="'+r2(-p.y)+'"></div>'+
@@ -6883,7 +7002,7 @@ if(tool==='offset'){
   var isRound = st.joint === 'round';
   var isBevel = st.joint === 'bevel';
 
-  extra += '<div class="card" id="offsetCard"><div class="card-h">Параметры отступа</div>';
+  extra += '<div class="card card-hero" id="offsetCard"><div class="card-h">Параметры отступа</div>';
 
   extra += fld('Расстояние, мм',
     '<input type="number" step="0.1" min="0.01" class="inp mono" id="offsetDist" value="'+st.dist+'">');
@@ -6923,7 +7042,7 @@ if(tool==='array'){
   var isRect  = stA.mode === 'rect';
   var isPolar = stA.mode === 'polar';
 
-  extra += '<div class="card" id="arrayCard"><div class="card-h">Массив копий<span class="note">'+copiesCnt+' новых</span></div>';
+  extra += '<div class="card card-hero" id="arrayCard"><div class="card-h">Массив копий<span class="note">'+copiesCnt+' новых</span></div>';
 
   /* Переключатель режима */
   extra += '<div class="fld"><label>Режим раскладки</label>'
@@ -6959,18 +7078,18 @@ if(tool==='array'){
 
 if(tool==='ruler'){
 var diagR=Math.hypot(b.w,b.h);
-extra+='<div class="card" id="rulerCard"><div class="card-h">Измерения объекта</div><div class="hint" style="padding-top:6px">'+
+extra+='<div class="card card-hero" id="rulerCard"><div class="card-h">Измерения объекта</div><div class="hint" style="padding-top:6px">'+
 'Ширина: <b>'+fmtLen(b.w)+'</b><br>Высота: <b>'+fmtLen(b.h)+'</b><br>Диагональ габарита: <b>'+fmtLen(diagR)+'</b><br>Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b></div></div>';
 }
 
 if(tool==='knife'){
-extra+='<div class="card" id="knifeCard"><div class="card-h">Инструмент «Нож»</div><div class="hint" style="padding-top:6px">'+
+extra+='<div class="card card-hero" id="knifeCard"><div class="card-h">Инструмент «Нож»</div><div class="hint" style="padding-top:6px">'+
 'Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b><br>Точек: <b>'+o.points.length+'</b> · Замкнут: <b>'+(o.closed?'да':'нет')+'</b></div>'+
 '<div class="hint">Кликните по этой фигуре, затем по второй замкнутой. Обе разрежутся в точках клика, соединятся мостиком и замкнутся в один контур. Фигуры не должны пересекаться.</div></div>';
 }
 var actions='<div class="btnrow" style="padding-top:10px"><button class="btn" id="pDup">'+icon('copy',14)+' Дубль</button><button class="btn danger" id="pDel">'+icon('trash',14)+' Удалить</button></div>'+
 (nCurves?'<div class="btnrow"><button class="btn" id="pLin">'+icon('linearize',14)+' Линеаризовать ('+nCurves+' кривых)</button></div>':'');
-box.innerHTML=topCards+cardHTML('Свойства','слой № '+(oNum!==undefined?oNum:'—')+' · Y↑',body+actions)+extra;
+box.innerHTML=topCards+extra+cardHTML('Свойства','слой № '+(oNum!==undefined?oNum:'—')+' · Y↑',body+actions);
 $('#pName').onchange=function(e){pushHistory();o.name=e.target.value||o.name;afterChange();};
 function num(id){var v=parseFloat($(id).value);return isNaN(v)?null:v;}
 $('#pX').onchange=function(){var v=num('#pX');if(v!==null){pushHistory();moveObjectBy(o,v-objBBox(o).x,0);afterChange();}};
