@@ -165,20 +165,26 @@ button svg{pointer-events:none;flex:none}
   font-weight:600;
 }
 .card.card-hero .inp{
-  background:rgba(255,255,255,.16);
-  border-color:rgba(255,255,255,.24);
-  color:#fff;
+  background:#FFFFFF;
+  border-color:transparent;
+  color:#1C1C1E;
 }
 .card.card-hero .inp::placeholder{
-  color:rgba(255,255,255,.55);
+  color:rgba(60,60,67,.4);
 }
 .card.card-hero .inp:focus{
-  background:rgba(255,255,255,.24);
-  border-color:#fff;
-  box-shadow:0 0 0 3px rgba(255,255,255,.28);
+  background:#FFFFFF;
+  border-color:#FFFFFF;
+  color:#1C1C1E;
+  box-shadow:0 0 0 3px rgba(255,255,255,.55);
 }
 .card.card-hero select.inp{
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%23FFFFFF' fill='none' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-color:#FFFFFF;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%238E8E93' fill='none' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.card.card-hero select.inp option{
+  background:#FFFFFF;
+  color:#1C1C1E;
 }
 .card.card-hero select.inp option{
   background:#1C1C1E;
@@ -6919,7 +6925,7 @@ function dimTextSvg(x, y, txt, fs, col, rotateDeg){
   var py = y - offMag * Math.cos(rad);
   return '<text x="'+px+'" y="'+py+'" font-size="'+fs+'" fill="'+col+'" '
        + 'text-anchor="middle" dominant-baseline="middle" '
-       + 'font-family="Inter,sans-serif" font-weight="500" '
+       + 'font-family="JetBrains Mono,ui-monospace,SFMono-Regular,Menlo,monospace" font-weight="600" '
        + 'transform="rotate('+r+' '+px+' '+py+')" '
        + 'style="paint-order:stroke;stroke:#fff;stroke-width:'+(fs*0.18).toFixed(2)+';stroke-linejoin:round">'
        + esc(txt) + '</text>';
