@@ -1806,13 +1806,16 @@ var arcDraft=null;
 var dimensions = [];
 var dimDraft = null;
 var showDimensions = true;
-var dimensionState = { type: 'h', fontSize: 3.5 };
+var dimensionState = { type: 'h', fontSize: 3.5, liveResult: false };
+var dimHoverCircle = null;   /* окружность под курсором — для R/⌀ в live-режиме */
 var cursorWorld = { x: 0, y: 0 };
 var nodeSel=new Set();
 var eraserHover=null;
 var dimEraserHover=null;   /* hover-подсветка размера под ножницами */
 var joinState=null, joinHover=null;
 var ruler={pts:[],hover:null,info:null};
+var rulerState = { liveLabel: true };     /* показывать всплывающий бейдж возле курсора */
+var _lastRulerCardSig = '';               /* сигнатура последнего рендера карточки */
 var knife={a:null, hover:null};
 var spaceDown=false;
 var history=[], future=[];
@@ -5261,7 +5264,8 @@ function projCollectData(){
     iso3D:iso3D, isoThickness:isoThickness, polySet:polySet,
     workArea:workArea, nestCfg:nestSaveCfg(), offsetCfg:offsetState,
 osnapCfg:osnapSaveCfg(), guides:guides, eraserMode:eraserMode,
-dimensions:dimensions, showDimensions:showDimensions, dimensionState:dimensionState
+dimensions:dimensions, showDimensions:showDimensions, dimensionState:dimensionState,
+rulerState:rulerState
   };
 }
 function projApplyData(data){
@@ -5313,11 +5317,15 @@ function projApplyData(data){
     return d && d.type === 'dimension' &&
            ['h','v','aligned','angle','radius','diameter'].indexOf(d.dimType) >= 0;
   }) : [];
-  if(data.showDimensions !== undefined) showDimensions = !!data.showDimensions;
-  if(data.dimensionState){
+    if(data.showDimensions !== undefined) showDimensions = !!data.showDimensions;
+  if(data.rulerState && data.rulerState.liveLabel !== undefined)
+    rulerState.liveLabel = !!data.rulerState.liveLabel;
+    if(data.dimensionState){
     if(['h','v','aligned','angle','radius','diameter'].indexOf(data.dimensionState.type) >= 0)
       dimensionState.type = data.dimensionState.type;
     if(+data.dimensionState.fontSize > 0) dimensionState.fontSize = +data.dimensionState.fontSize;
+    if(data.dimensionState.liveResult !== undefined)
+      dimensionState.liveResult = !!data.dimensionState.liveResult;
   }
   var _rpDims = $('#btnShowDims');
   if(_rpDims){
@@ -6334,11 +6342,50 @@ if(dimDraft && tool === 'dimension'){
        + ' x2="'+cursorWorld.x+'" y2="'+cursorWorld.y+'"'
        + ' stroke="rgba(255,149,0,.6)" stroke-width="1"'
        + ' stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>';
-  } else if(dimDraft.phase === 2 && dimDraft.dimType === 'angle'){
+    } else if(dimDraft.phase === 2 && dimDraft.dimType === 'angle'){
     h += '<line x1="'+dimDraft.p1.x+'" y1="'+dimDraft.p1.y+'"'
        + ' x2="'+cursorWorld.x+'" y2="'+cursorWorld.y+'"'
        + ' stroke="rgba(255,149,0,.6)" stroke-width="1"'
        + ' stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>';
+  }
+}
+
+/* ═══ Live-результат возле курсора ═══ */
+if(dimensionState.liveResult && tool === 'dimension'){
+  var sLd = viewScaleEff();
+  var liveTxt = null;
+
+  /* 1) Идёт построение линейного / углового размера */
+  if(dimDraft){
+    if(dimDraft.dimType === 'angle'){
+      if(dimDraft.phase === 2 && dimDraft.p2){
+        var vxL = dimDraft.p1.x, vyL = dimDraft.p1.y;
+        var a1L = Math.atan2(dimDraft.p2.y - vyL, dimDraft.p2.x - vxL);
+        var a2L = Math.atan2(cursorWorld.y - vyL, cursorWorld.x - vxL);
+        var swL = a2L - a1L;
+        while(swL >  Math.PI) swL -= 2 * Math.PI;
+        while(swL < -Math.PI) swL += 2 * Math.PI;
+        liveTxt = (Math.abs(swL) * 180 / Math.PI).toFixed(1) + '°';
+      }
+    } else if(dimDraft.phase === 2 && dimDraft.p2){
+      var p1L = dimDraft.p1, p2L = dimDraft.p2;
+      var mVal = 0;
+      if(dimDraft.dimType === 'h')      mVal = Math.abs(p2L.x - p1L.x);
+      else if(dimDraft.dimType === 'v') mVal = Math.abs(p2L.y - p1L.y);
+      else                              mVal = dist(p1L, p2L);
+      liveTxt = mVal.toFixed(1);
+    }
+  }
+  /* 2) Наведение на окружность для радиуса / диаметра */
+  else if(dimHoverCircle && (dimensionState.type === 'radius' || dimensionState.type === 'diameter')){
+    var rL = dimHoverCircle.an.r;
+    liveTxt = dimensionState.type === 'radius'
+      ? 'R ' + rL.toFixed(1)
+      : '⌀ ' + (rL * 2).toFixed(1);
+  }
+
+  if(liveTxt){
+    h += dimLiveLabelSvg(cursorWorld.x, cursorWorld.y, liveTxt, sLd);
   }
 }
 /* ═══ Маркер активного якоря при перемещении ═══
@@ -6550,11 +6597,35 @@ labLines.push('L1 = '+fmtLen(l1),'L2 = '+fmtLen(l2),'Σ = '+fmtLen(l1+l2));
 if(P.length===3&&!livePt) labLines.push('клик — начать заново');
 labAnchor=ruler.hover||seq[2];
 }
-if(labLines.length&&labAnchor) h+=rulerLabel(labAnchor.x+16/sR,labAnchor.y+16/sR,labLines,sR);
-if(!P.length&&!ruler.info){
-var hintLines=['Линейка','клик по точке — расстояние + угол','3-й клик — угол + диаметр по 3 точкам','клик по отрезку — его длина','клик по окружности — диаметр','ПКМ / Esc — сброс'];
-var ha=ruler.hover||{x:0,y:0};
-h+=rulerLabel(ha.x+16/sR,ha.y+16/sR,hintLines,sR);
+/* Всплывающий бейдж возле курсора — только если включён тумблер. */
+if(labLines.length&&labAnchor&&rulerState.liveLabel)
+  h+=rulerLabel(labAnchor.x+16/sR,labAnchor.y+16/sR,labLines,sR);
+if(!P.length&&!ruler.info&&rulerState.liveLabel){
+  var hintLines=['Линейка','клик по точке — расстояние + угол','3-й клик — угол + диаметр по 3 точкам','клик по отрезку — его длина','клик по окружности — диаметр','Shift+клик по фигуре — выбрать её','ПКМ / Esc — сброс'];
+  var ha=ruler.hover||{x:0,y:0};
+  h+=rulerLabel(ha.x+16/sR,ha.y+16/sR,hintLines,sR);
+}
+/* Дублирование результата в hero-карточку (#rulerCardBody).
+   Обновляем только когда текст реально изменился — чтобы не бить DOM
+   на каждом кадре движения курсора. */
+var rcb = document.getElementById('rulerCardBody');
+if(rcb){
+  var sig = labLines.join('|');
+  if(sig !== _lastRulerCardSig){
+    _lastRulerCardSig = sig;
+        if(labLines.length){
+      var html = '';
+      for(var li2=0; li2<labLines.length; li2++){
+        var st = (li2===0)
+          ? 'font-weight:700;color:#1C1C1E'
+          : 'color:rgba(60,60,67,.72)';
+        html += '<div style="'+st+'">'+esc(labLines[li2])+'</div>';
+      }
+      rcb.innerHTML = html;
+    } else {
+      rcb.innerHTML = '<span style="color:rgba(60,60,67,.5)">Начните измерение — клик на холсте</span>';
+    }
+  }
 }
 }
 /* ... конец блока ruler ... */
@@ -6915,6 +6986,26 @@ function dimArrowHead(tipX, tipY, dirX, dirY, len, w, col){
   var p2x = bx + dirY * w;
   var p2y = by - dirX * w;
   return '<path d="M '+tipX+' '+tipY+' L '+p1x+' '+p1y+' L '+p2x+' '+p2y+' Z" fill="'+col+'" stroke="none"/>';
+}
+/* Оранжевый бейдж-подсказка рядом с курсором.
+   s — эффективный масштаб вида (viewScaleEff()). */
+function dimLiveLabelSvg(x, y, txt, s){
+  var fs   = 12 / s;
+  var padX = 8  / s;
+  var padY = 4  / s;
+  var w    = txt.length * fs * 0.62 + padX * 2;
+  var hgt  = fs + padY * 2;
+  var r    = 5 / s;
+  var offX = 14 / s;
+  var offY = -14 / s;
+  var out = '';
+  out += '<rect x="'+(x + offX)+'" y="'+(y + offY - hgt)+'" width="'+w+'" height="'+hgt+'"'
+       + ' rx="'+r+'" fill="rgba(255,149,0,.95)" stroke="none"/>';
+  out += '<text x="'+(x + offX + padX)+'" y="'+(y + offY - hgt/2)+'"'
+       + ' font-size="'+fs+'" fill="#fff"'
+       + ' font-family="JetBrains Mono,ui-monospace,SFMono-Regular,Menlo,monospace" font-weight="600"'
+       + ' dominant-baseline="middle">'+esc(txt)+'</text>';
+  return out;
 }
 
 function dimTextSvg(x, y, txt, fs, col, rotateDeg){
@@ -7409,17 +7500,25 @@ function bindDimensionCardUI(){
       else fsi.value = dimensionState.fontSize;
     };
   }
-  var sAll = $('#dimShowAll');
-if(sAll){
-  sAll.onchange = function(){
-    showDimensions = !!sAll.checked;
-    var rp = $('#btnShowDims');
-    if(rp){ rp.classList.toggle('rp-on', showDimensions); rp.setAttribute('data-tip', showDimensions?'Скрыть все размеры':'Показать все размеры'); }
-    var swD = $('#swGridDims'); if(swD) swD.checked = showDimensions;
-    renderDimensions();
-    scheduleSave();
-  };
-}
+    var sAll = $('#dimShowAll');
+  if(sAll){
+    sAll.onchange = function(){
+      showDimensions = !!sAll.checked;
+      var rp = $('#btnShowDims');
+      if(rp){ rp.classList.toggle('rp-on', showDimensions); rp.setAttribute('data-tip', showDimensions?'Скрыть все размеры':'Показать все размеры'); }
+      var swD = $('#swGridDims'); if(swD) swD.checked = showDimensions;
+      renderDimensions();
+      scheduleSave();
+    };
+  }
+  var liveCb = $('#dimLive');
+  if(liveCb){
+    liveCb.onchange = function(){
+      dimensionState.liveResult = !!liveCb.checked;
+      renderOverlay();
+      scheduleSave();
+    };
+  }
   var clr = $('#dimClearAll');
   if(clr){
     clr.onclick = function(){
@@ -7434,6 +7533,54 @@ if(sAll){
       });
     };
   }
+}
+function rulerCardHTML(){
+  if(tool !== 'ruler') return '';
+
+  var sel = selected();
+  var selNoGroups = sel.filter(function(o){ return o.type !== 'group'; });
+  var body = '';
+
+  /* ─── Статический блок: габариты выделенного объекта ─── */
+  if(selNoGroups.length === 1 && selNoGroups[0].points && selNoGroups[0].points.length){
+    var o  = selNoGroups[0];
+    var bb = objBBox(o);
+    var diagR = Math.hypot(bb.w, bb.h);
+    body += '<div class="hint" style="padding-top:4px;padding-bottom:6px">'
+         +  'Ширина: <b>'+fmtLen(bb.w)+'</b><br>'
+         +  'Высота: <b>'+fmtLen(bb.h)+'</b><br>'
+         +  'Диагональ габарита: <b>'+fmtLen(diagR)+'</b><br>'
+         +  'Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b>'
+         +  '</div>';
+  } else if(selNoGroups.length > 1){
+    body += '<div class="hint" style="padding-top:4px;padding-bottom:6px">'
+         +  'Выделено объектов: <b>'+selNoGroups.length+'</b><br>'
+         +  '<small style="opacity:.75">Shift+клик по фигуре — выбрать одну</small>'
+         +  '</div>';
+  }
+
+  /* ─── Живой блок: тот же результат, что всплывает возле курсора ─── */
+      body += '<div class="fld" style="padding-top:0">'
+       +   '<label>Результат</label>'
+       +   '<div id="rulerCardBody" style="font-family:var(--fm);font-size:12.5px;line-height:1.55;'
+       +   'background:#FFFFFF;border-radius:10px;padding:9px 11px;min-height:36px;color:#1C1C1E">'
+       +   '<span style="color:rgba(60,60,67,.5)">Начните измерение — клик на холсте</span>'
+       +   '</div>'
+       + '</div>';
+
+  /* ─── Тумблер «Показывать возле курсора» ─── */
+  body += '<label class="srow">'
+       +   '<span class="stxt">Показывать возле курсора'
+       +     '<small>Всплывающий бейдж рядом с мышью</small>'
+       +   '</span>'
+       +   '<span class="sw"><input type="checkbox" id="rulerLive"'
+       +   (rulerState.liveLabel ? ' checked' : '') + '><i></i></span>'
+       + '</label>';
+
+  return '<div class="card card-hero" id="rulerCard">'
+       +   '<div class="card-h"><span>Линейка</span><span class="note">измерения</span></div>'
+       +   body
+       + '</div>';
 }
 function dimensionCardHTML(){
   if(tool !== 'dimension') return '';
@@ -7454,7 +7601,9 @@ function dimensionCardHTML(){
        + '</div>'
        + '<label class="srow"><span class="stxt">Показывать все размеры</span>'
        + '<span class="sw"><input type="checkbox" id="dimShowAll"'+(showDimensions?' checked':'')+'><i></i></span></label>'
-       + '<div class="btnrow"><button class="btn" id="dimClearAll">'+icon('trash',14)+' Удалить все размеры</button></div>'
+        + '<div class="btnrow"><button class="btn" id="dimClearAll">'+icon('trash',14)+' Удалить все размеры</button></div>'
+       + '<label class="srow"><span class="stxt">Результат возле курсора<small>Показывать измерение рядом с курсором во время построения</small></span>'
+       + '<span class="sw"><input type="checkbox" id="dimLive"'+(dimensionState.liveResult?' checked':'')+'><i></i></span></label>'
        + '<div class="hint">'+dimTypeHint()+'</div>'
        + '</div>';
 }
@@ -7527,6 +7676,15 @@ function bindDimensionCardUI(){
     };
   }
 }
+function bindRulerCardUI(){
+  var cb = $('#rulerLive');
+  if(!cb) return;
+  cb.onchange = function(){
+    rulerState.liveLabel = !!cb.checked;
+    renderOverlay();
+    scheduleSave();
+  };
+}
 function bindEraserCardUI(){
   var segE = $('#eraserModeSeg');
   if(!segE) return;
@@ -7572,7 +7730,7 @@ var sel=selected();
    в самом верху панели «Объект» во всех ветках — это гарантирует,
    что при активации инструмента карточка не «прыгает» по вкладке
    и не исчезает при смене выделения. */
-var topCards = polyCardHTML() + eraserCardHTML() + dimensionCardHTML();
+var topCards = polyCardHTML() + eraserCardHTML() + dimensionCardHTML() + rulerCardHTML();
 
 if(!sel.length){
 box.innerHTML=topCards+
@@ -7782,11 +7940,7 @@ if(tool==='array'){
   extra += '</div>';
 }
 
-if(tool==='ruler'){
-var diagR=Math.hypot(b.w,b.h);
-extra+='<div class="card card-hero" id="rulerCard"><div class="card-h">Измерения объекта</div><div class="hint" style="padding-top:6px">'+
-'Ширина: <b>'+fmtLen(b.w)+'</b><br>Высота: <b>'+fmtLen(b.h)+'</b><br>Диагональ габарита: <b>'+fmtLen(diagR)+'</b><br>Периметр: <b>'+fmtLen(rulerPerimeter(o))+'</b></div></div>';
-}
+/* (карточка «Линейка» — см. rulerCardHTML()) */
 
 if(tool==='knife'){
 extra+='<div class="card card-hero" id="knifeCard"><div class="card-h">Инструмент «Нож»</div><div class="hint" style="padding-top:6px">'+
@@ -7937,7 +8091,7 @@ if(tool==='array'){
 }
 bindEraserCardUI();
 }
-function renderProps(){ renderPropsInner(); bindPolyCard(); bindEraserCardUI(); bindDimensionCardUI(); }
+function renderProps(){ renderPropsInner(); bindPolyCard(); bindEraserCardUI(); bindDimensionCardUI(); bindRulerCardUI(); }
 function transformObjectScale(o,b,sx,sy){
 if(o.type==='group'){ groupChildren(o).forEach(function(c){transformObjectScale(c,b,sx,sy);}); return; }
 if(!o.points) return;
@@ -9274,6 +9428,7 @@ if(tool==='dimension'){
       offset: 20, fontSize: dimensionState.fontSize,
       visible: true, color: '#1C1C1E'
     });
+        dimHoverCircle = null;
     afterChange();
     toast((dimensionState.type === 'radius' ? 'Радиус' : 'Диаметр') + ' создан', 'ruler');
     return;
@@ -9357,9 +9512,24 @@ knifeExecute(knife.a,cut);
 return;
 }
 if(tool==='ruler'){
-rulerClick(w,e.shiftKey||ruler.pts.length>0);
-renderOverlay();
-return;
+  /* Shift+клик по фигуре — выбрать её, сбросить текущее измерение,
+     обновить статический блок «Измерения объекта» в карточке. */
+  if(e.shiftKey){
+    var hitFig = topObjectAt(w);
+    if(hitFig){
+      selection = [hitFig.id];
+      rulerReset();
+      ruler.hover = null;
+      _lastRulerCardSig = '';
+      afterChange();
+      toast('Выбрано: ' + esc(hitFig.name || 'объект'), 'cursor');
+      return;
+    }
+    /* Shift без попадания в фигуру — обычное поведение forcePoint. */
+  }
+  rulerClick(w,e.shiftKey||ruler.pts.length>0);
+  renderOverlay();
+  return;
 }
 if(tool==='join'){
 var ep=nearestOpenEndpoint(w,joinState?joinState.id:null);
@@ -9839,6 +10009,18 @@ selection=[]; renderObjects(); renderPanels();
 }
 renderOverlay();
 }
+} else if(tool==='dimension'){
+  /* Отслеживаем окружность под курсором для radius/diameter. */
+  if(dimensionState.type === 'radius' || dimensionState.type === 'diameter'){
+    var hc = rulerCircleAt(w);
+    var nk = hc ? hc.o.id : null;
+    var ok = dimHoverCircle ? dimHoverCircle.o.id : null;
+    if(nk !== ok) dimHoverCircle = hc;
+  } else if(dimHoverCircle){
+    dimHoverCircle = null;
+  }
+  /* Перерисовка — чтобы dimDraft-превью и live-бейдж следовали за курсором. */
+  renderOverlay();
 } else if(pen||shapeDraft||polyDraft||arcDraft) renderOverlay();
 return;
 }
@@ -10443,11 +10625,11 @@ function setTool(t){
 if(tool==='pen'&&t!=='pen') pen=null;
 if(t!=='eraser'){ eraserHover=null; dimEraserHover=null; }
 if(t!=='join'){ joinState=null; joinHover=null; }
-if(t!=='ruler'){ rulerReset(); ruler.hover=null; }
+if(t!=='ruler'){ rulerReset(); ruler.hover=null; _lastRulerCardSig=''; }
 if(t!=='poly'&&polyDraft){ polyDraft=null; }
 if(t!=='arc'&&arcDraft){ arcDraft=null; }
 if(t!=='knife'&&knife.a){ knifeReset(); selection=[]; }
-if(t!=='dimension'&&dimDraft){ dimDraft=null; }
+if(t!=='dimension'){ dimDraft=null; dimHoverCircle=null; }
 tool=t; nodeSel.clear();
 wrap.dataset.tool=t;
 $$('.tool-btn').forEach(function(b){b.classList.remove('active');});
