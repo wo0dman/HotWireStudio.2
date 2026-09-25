@@ -1804,6 +1804,7 @@ var dimensionState = { type: 'h', fontSize: 3.5 };
 var cursorWorld = { x: 0, y: 0 };
 var nodeSel=new Set();
 var eraserHover=null;
+var dimEraserHover=null;   /* hover-подсветка размера под ножницами */
 var joinState=null, joinHover=null;
 var ruler={pts:[],hover:null,info:null};
 var knife={a:null, hover:null};
@@ -6668,6 +6669,28 @@ h+=rulerLabel(kAnchor.x+18/sK,kAnchor.y+18/sK,kLines,sK);
 if(tool==='start'&&!solidMode()){
 for(var t=0;t<objects.length;t++) if(objects[t].visible&&objects[t].type!=='group'&&objects[t].points&&objects[t].points.length) h+=startMarker(objects[t].points[0],s,true);
 }
+/* ═══ Ножницы: подсветка размера под курсором ═══ */
+if(tool==='eraser' && dimEraserHover){
+  var sDE = viewScaleEff();
+  var dimCopy = {
+    dimType:  dimEraserHover.dimType,
+    p1:       dimEraserHover.p1,
+    p2:       dimEraserHover.p2,
+    p3:       dimEraserHover.p3,
+    r:        dimEraserHover.r,
+    offset:   dimEraserHover.offset,
+    fontSize: dimEraserHover.fontSize,
+    color:    '#FF3B30'
+  };
+  h += renderDimensionSvg(dimCopy);
+  /* Дополнительный маркер «будет удалено» */
+  var midD = dimDistHintCenter(dimEraserHover);
+  if(midD){
+    h += '<circle cx="'+midD.x+'" cy="'+midD.y+'" r="'+(11/sDE)+'" fill="none" stroke="#FF3B30" stroke-width="1.6" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>';
+    h += '<text x="'+(midD.x+14/sDE)+'" y="'+(midD.y-12/sDE)+'" font-size="'+(10.5/sDE)+'" fill="#FF3B30" stroke="#fff" stroke-width="'+(3/sDE)+'" paint-order="stroke" font-family="JetBrains Mono,monospace" font-weight="600">УДАЛИТЬ</text>';
+  }
+}
+
 if(tool==='eraser'&&eraserHover){
 var eo=findObj(eraserHover.id);
 if(eo&&eo.type!=='group'){
@@ -7302,12 +7325,13 @@ function eraserCardHTML(){
        + '<button data-v="trimOne"'+(isOne?' class="on"':'')+'>До линии</button>'
        + '<button data-v="trimTwo"'+(isTwo?' class="on"':'')+'>Между линиями</button>'
        + '</div></div>'
-       + '<div class="hint">'
+              + '<div class="hint">'
        + (isSeg
           ? '<b>Сегмент</b> — клик по линии удаляет её между соседними узлами (замкнутый контур размыкается, открытый делится надвое).'
           : isOne
           ? '<b>До линии</b> — клик по линии удаляет участок от точки клика до <b>ближайшего</b> пересечения с другим контуром или направляющей. Если пересечений нет — работает как «Сегмент».'
           : '<b>Между линиями</b> — клик по линии удаляет участок <b>между двумя</b> ближайшими пересечениями, охватывающими точку клика. Если пересечений нет — работает как «Сегмент».')
+       + '<br><b>Размеры</b> удаляются целиком — просто кликните ножницами по размерной линии.'
        + '</div></div>';
 }
 function dimensionCardHTML(){
@@ -7468,12 +7492,13 @@ function bindDimensionCardUI(){
       else fsi.value = dimensionState.fontSize;
     };
   }
-  var sAll = $('#dimShowAll');
+    var sAll = $('#dimShowAll');
   if(sAll){
     sAll.onchange = function(){
       showDimensions = !!sAll.checked;
       var rp = $('#btnShowDims');
       if(rp){ rp.classList.toggle('rp-on', showDimensions); rp.setAttribute('data-tip', showDimensions?'Скрыть все размеры':'Показать все размеры'); }
+      var swD = $('#swGridDims'); if(swD) swD.checked = showDimensions;
       renderDimensions();
       scheduleSave();
     };
@@ -8875,6 +8900,128 @@ function trimContourByClick(hit, worldPt, mode){
     'scissors');
   return true;
 }
+/* ═══ Попадание ножницами по размеру ═══
+   Ищем ближайший видимый размер, чья «главная линия» (размерная линия,
+   дуга угла или отрезок радиуса/диаметра) проходит ближе допуска. */
+function dimDistTo(w, d){
+  if(!d) return Infinity;
+  var tol = Math.max(worldTol(9), 0.5);
+
+    /* Радиус / диаметр — главная линия от центра к краю */
+  if(d.dimType === 'radius' || d.dimType === 'diameter'){
+    var cx = d.p1.x, cy = d.p1.y;
+    var r  = +d.r || dist(d.p1, d.p2);
+    if(!(r > 0)) return Infinity;
+    var end = d.p2 || {x: cx + r, y: cy};
+    var dx = end.x - cx, dy = end.y - cy;
+    var L  = Math.hypot(dx, dy) || 1;
+    var ux = dx / L, uy = dy / L;
+    var tip1 = {x: cx + ux*r, y: cy + uy*r};
+    if(d.dimType === 'diameter'){
+      var tip2 = {x: cx - ux*r, y: cy - uy*r};
+      return distToSeg(w, tip2, tip1);
+    }
+    return distToSeg(w, {x:cx, y:cy}, tip1);
+  }
+
+  /* Угол — дуга */
+  if(d.dimType === 'angle'){
+    if(!d.p2 || !d.p3) return Infinity;
+    var vx = d.p1.x, vy = d.p1.y;
+    var a1 = Math.atan2(d.p2.y - vy, d.p2.x - vx);
+    var a2 = Math.atan2(d.p3.y - vy, d.p3.x - vx);
+    var rArc = Math.max(8, Math.abs(+d.offset) || 40);
+    var sweep = a2 - a1;
+    while(sweep >  Math.PI) sweep -= 2 * Math.PI;
+    while(sweep < -Math.PI) sweep += 2 * Math.PI;
+    var steps = Math.max(10, Math.ceil(Math.abs(sweep) * 10));
+    var minD = Infinity;
+    for(var s = 0; s <= steps; s++){
+      var a = a1 + sweep * s / steps;
+      var px = vx + Math.cos(a) * rArc;
+      var py = vy + Math.sin(a) * rArc;
+      var dd = Math.hypot(w.x - px, w.y - py);
+      if(dd < minD) minD = dd;
+    }
+    return minD;
+  }
+
+  /* Линейные: h / v / aligned — размерная линия */
+  var p1 = d.p1, p2 = d.p2;
+  if(!p1 || !p2) return Infinity;
+  var off = +d.offset || 40;
+
+  if(d.dimType === 'h'){
+    var yL = p1.y + off;
+    return distToSeg(
+      w,
+      {x: Math.min(p1.x, p2.x), y: yL},
+      {x: Math.max(p1.x, p2.x), y: yL}
+    );
+  }
+  if(d.dimType === 'v'){
+    var xL = p1.x + off;
+    return distToSeg(
+      w,
+      {x: xL, y: Math.min(p1.y, p2.y)},
+      {x: xL, y: Math.max(p1.y, p2.y)}
+    );
+  }
+  /* aligned */
+  var ddx = p2.x - p1.x, ddy = p2.y - p1.y;
+  var Lp = Math.hypot(ddx, ddy) || 1;
+  var nx = -ddy / Lp, ny = ddx / Lp;
+    var a = {x: p1.x + nx*off, y: p1.y + ny*off};
+  var b = {x: p2.x + nx*off, y: p2.y + ny*off};
+  return distToSeg(w, a, b);
+}
+
+/* Точка-маркер для подсветки ножницами. */
+function dimDistHintCenter(d){
+  if(!d || !d.p1) return null;
+  if(d.dimType === 'radius' || d.dimType === 'diameter'){
+    var cx = d.p1.x, cy = d.p1.y;
+    var r  = +d.r || dist(d.p1, d.p2);
+    var end = d.p2 || {x: cx + r, y: cy};
+    var dx = end.x - cx, dy = end.y - cy;
+    var L  = Math.hypot(dx, dy) || 1;
+    return {x: cx + (dx/L) * r * 0.5, y: cy + (dy/L) * r * 0.5};
+  }
+  if(d.dimType === 'angle'){
+    if(!d.p2 || !d.p3) return {x:d.p1.x, y:d.p1.y};
+    var vx = d.p1.x, vy = d.p1.y;
+    var a1 = Math.atan2(d.p2.y - vy, d.p2.x - vx);
+    var a2 = Math.atan2(d.p3.y - vy, d.p3.x - vx);
+    var sweep = a2 - a1;
+    while(sweep >  Math.PI) sweep -= 2 * Math.PI;
+    while(sweep < -Math.PI) sweep += 2 * Math.PI;
+    var rArc = Math.max(8, Math.abs(+d.offset) || 40);
+    var midA = a1 + sweep / 2;
+    return {x: vx + Math.cos(midA) * rArc, y: vy + Math.sin(midA) * rArc};
+  }
+  var p1 = d.p1, p2 = d.p2;
+  if(!p1 || !p2) return {x:p1.x, y:p1.y};
+  var off = +d.offset || 40;
+  if(d.dimType === 'h') return {x:(p1.x+p2.x)/2, y:p1.y + off};
+  if(d.dimType === 'v') return {x:p1.x + off,      y:(p1.y+p2.y)/2};
+  var ddx = p2.x - p1.x, ddy = p2.y - p1.y;
+  var Lp = Math.hypot(ddx, ddy) || 1;
+  var nx = -ddy / Lp, ny = ddx / Lp;
+  return {x:(p1.x+p2.x)/2 + nx*off, y:(p1.y+p2.y)/2 + ny*off};
+}
+
+function dimensionHitAt(w){
+  if(!showDimensions || !dimensions.length) return null;
+  var tol = Math.max(worldTol(9), 0.5);
+  var best = null, bestD = tol;
+  for(var i = 0; i < dimensions.length; i++){
+    var d = dimensions[i];
+    if(d.visible === false) continue;
+    var dd = dimDistTo(w, d);
+    if(dd < bestD){ bestD = dd; best = d; }
+  }
+  return best;
+}
 function findSegmentHit(w){
 var tol=worldTol(7);
 for(var i=objects.length-1;i>=0;i--){
@@ -9363,14 +9510,24 @@ if(tool==='offset'){
   return;
 }
 if(tool==='eraser'){
+  /* ═══ 1. Размеры имеют приоритет — удаляются целиком ═══ */
+  var dimHit = dimensionHitAt(w);
+  if(dimHit){
+    pushHistory();
+    dimensions = dimensions.filter(function(x){ return x.id !== dimHit.id; });
+    dimEraserHover = null;
+    renderDimensions();
+    afterChange();
+    toast('Размер удалён', 'trash');
+    return;
+  }
+
+  /* ═══ 2. Иначе — обычная логика с контурами ═══ */
   var hit5 = findSegmentHit(w);
   if(!hit5) return;
   if(eraserMode === 'segment'){
-    /* Режим 1 — удаление сегмента между соседними узлами */
     removeSegment(hit5.o, hit5.i);
   } else {
-    /* Режимы 2 и 3 — обрезка по пересечениям.
-       Если пересечений рядом нет — fallback на удаление сегмента. */
     var trimmed = trimContourByClick(hit5, w, eraserMode);
     if(!trimmed) removeSegment(hit5.o, hit5.i);
   }
@@ -9626,12 +9783,26 @@ y:arcDraft.cy+arcDraft.r*Math.sin(ra)
 }
 if(!drag){
 if(tool==='eraser'){
-var h=findSegmentHit(w);
-var key=h?(h.o.id+':'+h.i):null;
-if(key!==(eraserHover?eraserHover.key:null)){
-eraserHover=h?{key:key,id:h.o.id,i:h.i,world:{x:w.x,y:w.y}}:null;
-renderOverlay();
-}
+  /* Сначала проверяем попадание по размеру — он перекрывает контуры. */
+  var dHit = dimensionHitAt(w);
+  var dKey = dHit ? dHit.id : null;
+  var prevDKey = dimEraserHover ? dimEraserHover.id : null;
+  if(dKey !== prevDKey){
+    dimEraserHover = dHit;
+    if(dHit){
+      /* Над размером — гасим подсветку сегмента, чтобы не мешала. */
+      eraserHover = null;
+    }
+    renderOverlay();
+  }
+  if(!dHit){
+    var h=findSegmentHit(w);
+    var key=h?(h.o.id+':'+h.i):null;
+    if(key!==(eraserHover?eraserHover.key:null)){
+      eraserHover=h?{key:key,id:h.o.id,i:h.i,world:{x:w.x,y:w.y}}:null;
+      renderOverlay();
+    }
+  }
 
 } else if(tool==='join'){
 var hj=nearestOpenEndpoint(w,joinState?joinState.id:null);
@@ -10261,7 +10432,7 @@ updateToolpathBtn(); updateNumbersBtn(); updateViewToggles();
 }
 function setTool(t){
 if(tool==='pen'&&t!=='pen') pen=null;
-if(t!=='eraser') eraserHover=null;
+if(t!=='eraser'){ eraserHover=null; dimEraserHover=null; }
 if(t!=='join'){ joinState=null; joinHover=null; }
 if(t!=='ruler'){ rulerReset(); ruler.hover=null; }
 if(t!=='poly'&&polyDraft){ polyDraft=null; }
