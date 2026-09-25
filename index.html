@@ -7066,7 +7066,10 @@ function renderDimensionSvg(d){
 
 function renderDimensions(){
   if(!dimsLayer) return;
-  if(!showDimensions){ dimsLayer.innerHTML = ''; return; }
+  /* Размеры — плоская аннотация, в ISO они не имеют смысла:
+     контуры проецируются, а размерные линии/стрелки/текст остались бы
+     в плоскости XY и «висели» поверх изометрической проекции. */
+  if(iso || !showDimensions){ dimsLayer.innerHTML = ''; return; }
   var h = '';
   for(var i = 0; i < dimensions.length; i++){
     var d = dimensions[i];
