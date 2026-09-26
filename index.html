@@ -448,9 +448,9 @@ button.chip:hover{background:var(--fill)}
 .help-sheet{width:min(760px,96vw);max-height:86vh;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden;animation:alertIn .24s var(--ease)}
 .help-head{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:.5px solid var(--sep);flex:none}
 .help-head b{font-size:16px;font-weight:700;letter-spacing:-.02em;flex:none}
-.help-tabs{flex:1;display:flex;gap:2px;padding:2px;background:var(--fill2);border-radius:9px;overflow-x:auto;scrollbar-width:none}
+.help-tabs{flex:1;display:flex;gap:2px;padding:2px;background:var(--fill2);border-radius:9px;overflow-x:auto;scrollbar-width:none;position:relative}
 .help-tabs::-webkit-scrollbar{display:none}
-.help-tabs button{height:28px;padding:0 11px;border-radius:7px;font-size:12px;font-weight:600;color:var(--label2);white-space:nowrap;transition:background .15s,color .15s;flex:none}
+.help-tabs button{height:28px;padding:0 9px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--label2);white-space:nowrap;transition:background .15s,color .15s;flex:none}
 .help-tabs button:hover{color:var(--label)}
 .help-tabs button.on{background:#fff;color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
 .help-body{overflow-y:auto;padding:22px 24px 30px;flex:1}
@@ -10810,13 +10810,43 @@ bd.remove(); resolve(r);
 };
 });
 }
-function showHelp(){ $('#helpOverlay').classList.add('show'); }
+function showHelp(){
+  $('#helpOverlay').classList.add('show');
+  /* После того как окно отрисовано — прокрутить полосу вкладок к активной. */
+  requestAnimationFrame(function(){
+    var tabs = document.getElementById('helpTabs');
+    if(tabs && typeof tabs._centerActive === 'function'){
+      tabs._centerActive();
+    }
+  });
+}
 function hideHelp(){ $('#helpOverlay').classList.remove('show'); }
 
-/* Переключение вкладок внутри справки. */
+/* Переключение вкладок внутри справки.
+   Дополнительно прокручиваем полосу вкладок так, чтобы активная оказалась
+   по центру (или максимально близко к центру, если она у самого края). */
 function bindHelpTabs(){
   var tabs = $('#helpTabs');
   if(!tabs) return;
+
+  /* Центрировать кнопку внутри полосы #helpTabs.
+     Использует ручной расчёт scrollLeft — работает стабильнее, чем
+     scrollIntoView({inline:'center'}), и не дёргает родителя. */
+  function centerTab(btn){
+    if(!btn) return;
+    var max = tabs.scrollWidth - tabs.clientWidth;
+    if(max <= 0){ tabs.scrollLeft = 0; return; }
+    var target = btn.offsetLeft + btn.offsetWidth / 2 - tabs.clientWidth / 2;
+    if(target < 0) target = 0;
+    if(target > max) target = max;
+    /* Плавно, если браузер умеет; иначе мгновенно. */
+    try{
+      tabs.scrollTo({ left: target, behavior: 'smooth' });
+    }catch(e){
+      tabs.scrollLeft = target;
+    }
+  }
+
   tabs.onclick = function(e){
     var b = e.target.closest('button[data-p]');
     if(!b) return;
@@ -10830,6 +10860,22 @@ function bindHelpTabs(){
       pane.classList.toggle('on', pane.dataset.p === p);
     });
     try{ body.scrollTop = 0; }catch(err){}
+    centerTab(b);
+  };
+
+  /* При открытии справки тоже сразу центрируем активную вкладку —
+     чтобы пользователь видел середину полосы, а не её левый край. */
+  var overlay = $('#helpOverlay');
+  if(overlay){
+    overlay.addEventListener('click', function(ev){
+      if(ev.target && ev.target.closest && ev.target.closest('#helpOverlay')){ /* no-op */ }
+    });
+  }
+
+  /* Публикуем метод центрирования — вызовем его в showHelp(). */
+  tabs._centerActive = function(){
+    var active = tabs.querySelector('button.on') || tabs.querySelector('button[data-p]');
+    centerTab(active);
   };
 }
 /* ═══════════════ ТУЛБАРЫ ═══════════════ */
