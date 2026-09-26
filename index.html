@@ -10991,6 +10991,9 @@ gset.showTool=!gset.showTool;
 var cb=$('#cShow'); if(cb) cb.checked=gset.showTool;
 renderToolpath(); updateToolpathBtn(); scheduleSave();
 };
+$('#btnShowNumbers').onclick=function(){
+    toggleNumbers();
+};
 $('#btnShowDims').onclick=function(){
   showDimensions=!showDimensions;
   this.classList.toggle('rp-on',showDimensions);
@@ -11000,6 +11003,7 @@ $('#btnShowDims').onclick=function(){
   renderDimensions();
   scheduleSave();
   toast(showDimensions?'Размеры показаны':'Размеры скрыты','ruler');
+  
 };
 
 updateToolpathBtn(); updateNumbersBtn(); updateViewToggles();
