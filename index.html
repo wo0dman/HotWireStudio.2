@@ -446,9 +446,37 @@ button.chip:hover{background:var(--fill)}
 #helpOverlay{position:fixed;inset:0;background:rgba(0,0,0,.26);backdrop-filter:blur(7px);z-index:3500;display:none;align-items:center;justify-content:center;padding:24px}
 #helpOverlay.show{display:flex;animation:fadeIn .18s ease}
 .help-sheet{width:min(760px,96vw);max-height:86vh;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden;animation:alertIn .24s var(--ease)}
-.help-head{display:flex;align-items:center;gap:12px;padding:18px 22px 14px;border-bottom:.5px solid var(--sep);flex:none}
-.help-head b{font-size:17px;font-weight:700;letter-spacing:-.02em;flex:1}
-.help-body{overflow-y:auto;padding:18px 22px 26px}
+.help-head{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:.5px solid var(--sep);flex:none}
+.help-head b{font-size:16px;font-weight:700;letter-spacing:-.02em;flex:none}
+.help-tabs{flex:1;display:flex;gap:2px;padding:2px;background:var(--fill2);border-radius:9px;overflow-x:auto;scrollbar-width:none}
+.help-tabs::-webkit-scrollbar{display:none}
+.help-tabs button{height:28px;padding:0 11px;border-radius:7px;font-size:12px;font-weight:600;color:var(--label2);white-space:nowrap;transition:background .15s,color .15s;flex:none}
+.help-tabs button:hover{color:var(--label)}
+.help-tabs button.on{background:#fff;color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+.help-body{overflow-y:auto;padding:22px 24px 30px;flex:1}
+.help-pane{display:none}
+.help-pane.on{display:block;animation:helpPaneIn .18s var(--ease)}
+@keyframes helpPaneIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Секции внутри вкладки */
+.hsec2{margin-bottom:22px}
+.hsec2-t{font-size:12.5px;font-weight:700;color:var(--label);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.hsec2-t::after{content:'';flex:1;height:.5px;background:var(--sep)}
+.hstep{display:flex;gap:10px;padding:6px 0;align-items:flex-start;font-size:13px}
+.hstep .num{flex:none;width:22px;height:22px;border-radius:50%;background:var(--blueTint);color:var(--blue);font:600 11px var(--fm);display:flex;align-items:center;justify-content:center;margin-top:1px}
+.hstep .txt{flex:1;line-height:1.55;color:var(--label2)}
+.hstep .txt b{color:var(--label);font-weight:600}
+.hex{background:var(--fill);border-radius:10px;padding:10px 13px;font-size:12px;line-height:1.6;color:var(--label2);margin:6px 0 12px}
+.hex b{color:var(--label);font-weight:600}
+.hex code{font-family:var(--fm);background:#fff;border-radius:5px;padding:1px 5px;font-size:11px;color:var(--blue);border:.5px solid var(--sep2)}
+.hkbd{display:inline-block;font:600 11px var(--fm);color:var(--blue);background:var(--blueTint);border-radius:5px;padding:2px 6px;margin:0 2px;line-height:1.3}
+.hex-warn{background:rgba(255,149,0,.10);border-radius:10px;padding:10px 13px;font-size:12px;line-height:1.6;color:var(--orangeDeep);margin:6px 0 12px;border-left:3px solid var(--orange)}
+.hex-warn b{color:#8A4000}
+.hex-ok{background:rgba(52,199,89,.10);border-radius:10px;padding:10px 13px;font-size:12px;line-height:1.6;color:#1F7A38;margin:6px 0 12px;border-left:3px solid var(--green)}
+.hex-ok b{color:#166029}
+.recipe{border:.5px solid var(--sep);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:#FAFAFC}
+.recipe-h{font-size:13.5px;font-weight:700;color:var(--label);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.recipe-h .badge{font:500 9.5px var(--fm);background:var(--orangeTint);color:var(--orangeDeep);padding:2px 7px;border-radius:5px;letter-spacing:.04em}
 .hsec{margin-bottom:18px}
 .hsec-t{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--orangeDeep);margin-bottom:8px;display:flex;align-items:center;gap:7px}
 .hsec-t::after{content:'';flex:1;height:.5px;background:var(--sep)}
@@ -1519,85 +1547,378 @@ button.chip:hover{background:var(--fill)}
 <div id="helpOverlay">
 <div class="help-sheet">
 <div class="help-head">
-<b>Справка и горячие клавиши</b>
+<b>Руководство</b>
+<div class="help-tabs" id="helpTabs">
+  <button data-p="quick" class="on">Быстрый старт</button>
+  <button data-p="draw">Рисование</button>
+  <button data-p="edit">Редактирование</button>
+  <button data-p="dim">Размеры</button>
+  <button data-p="layers">Слои и резка</button>
+  <button data-p="cam">G-code</button>
+  <button data-p="nest">Мозаика</button>
+  <button data-p="files">Файлы</button>
+  <button data-p="keys">Клавиши</button>
+</div>
 <button class="ibtn" id="helpClose"></button>
 </div>
-<div class="help-body"><div class="help-cols">
-<div>
-<div class="hsec"><div class="hsec-t">Инструменты рисования</div>
-<div class="hrow"><span class="hk">P</span><span class="hd"><b>Ручка</b> — клик ставит точку, клик+тянуть создаёт кривую Безье. Клик по первой точке замыкает контур, <b>Enter</b> — завершить. Курсор и превью сегмента примагничиваются к сетке и к OSNAP-точкам в реальном времени.</span></div>
-<div class="hrow"><span class="hk">L</span><span class="hd"><b>Отрезок</b> · Shift — угол 45°.</span></div>
-<div class="hrow"><span class="hk">C</span><span class="hd"><b>Дуга</b>: 1) центр, 2) начальная точка, 3) конечная точка. <b>Shift</b> — угол кратно 15°.</span></div>
-<div class="hrow"><span class="hk">R</span><span class="hd"><b>Прямоугольник</b> · Shift — квадрат.</span></div>
-<div class="hrow"><span class="hk">E</span><span class="hd"><b>Эллипс</b> · Shift — круг.</span></div>
-<div class="hrow"><span class="hk">O</span><span class="hd"><b>Многоугольник</b>, вписанный в окружность: тяните от центра, <b>Shift</b> — поворот шагом 15°.</span></div>
+<div class="help-body">
+
+<!-- ═══════════ 1. БЫСТРЫЙ СТАРТ ═══════════ -->
+<div class="help-pane on" data-p="quick">
+  <div class="hsec2"><div class="hsec2-t">Что это за программа</div>
+    <div class="hex"><b>HotWire Studio</b> — векторный CAM для 2D-резки пенопласта раскалённой проволокой. Рисуете контур в 2D, программа генерирует G-code для станка и показывает, как проволока пройдёт по материалу.</div>
+    <div class="hex">Интерфейс — светлая iOS-тема: <b>слева</b> инструменты, <b>по центру</b> холст, <b>справа</b> панель свойств. Всё, что можно настроить под конкретный инструмент, появляется в <b>синей hero-карточке</b> в верхней части панели «Объект».</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Первые шаги</div>
+    <div class="hstep"><span class="num">1</span><span class="txt"><b>Нарисуйте контур.</b> Простой прямоугольник — клавиша <span class="hkbd">R</span>, тяните по диагонали. Круг — <span class="hkbd">E</span>. От руки — <span class="hkbd">P</span>, клики ставят точки, перетаскивание создаёт кривую Безье.</span></div>
+    <div class="hstep"><span class="num">2</span><span class="txt"><b>Задайте порядок резки.</b> Откройте вкладку «Слои» справа. Строки можно перетаскивать — верхняя строка списка режется первой. Номер слоя в оранжевом бейдже = порядок резки в G-code.</span></div>
+    <div class="hstep"><span class="num">3</span><span class="txt"><b>Настройте станок.</b> Вкладка «Станок» → блок «Станок и проволока». Поставьте подачу (типично 200–400 мм/мин), укажите команду включения проволоки (по умолчанию <code>M3 S1000</code>), при необходимости включите компенсацию пропила.</span></div>
+    <div class="hstep"><span class="num">4</span><span class="txt"><b>Скачайте G-code.</b> Кнопка <b>«G-code»</b> в правом верхнем углу. Готовый файл откроется в браузере на скачивание — имя собирается из шаблона (проект, дата, счётчик).</span></div>
+  </div>
+
+  <div class="recipe">
+    <div class="recipe-h"><span class="badge">Рецепт</span> Первая деталь — прямоугольник с двумя отверстиями</div>
+    <div class="hstep"><span class="num">1</span><span class="txt">Нажмите <span class="hkbd">R</span>, тяните от точки А до точки В. Получите прямоугольник.</span></div>
+    <div class="hstep"><span class="num">2</span><span class="txt">Нажмите <span class="hkbd">E</span>, нарисуйте небольшой круг внутри. Ещё раз — второй круг.</span></div>
+    <div class="hstep"><span class="num">3</span><span class="txt">В панели «Объект» появится список слоёв. Перетащите круг «наверх» — он будет резаться первым (проволока сначала проходит внутренние отверстия, потом внешний контур).</span></div>
+    <div class="hstep"><span class="num">4</span><span class="txt">Вкладка «Станок» → включите <b>«Привязать задание к нулю (0;0)»</b> и задайте «Отступ от края = 10 мм» — чтобы проволока начинала рез не на самом краю листа.</span></div>
+    <div class="hstep"><span class="num">5</span><span class="txt">Нажмите <span class="hkbd">T</span> — включится симулятор. Проиграйте рез, посмотрите скорость и длину траектории. Если всё ок — кнопка <b>«G-code»</b>.</span></div>
+  </div>
+
+  <div class="hex-warn"><b>Совет перед резкой.</b> Всегда проверяйте программу в симуляторе (<span class="hkbd">T</span>). Особенно — начало реза (точку врезки) и порядок контуров: если проволока сначала режет внешний контур, деталь может отвалиться от заготовки, и внутренние отверстия резать будет нечем.</div>
 </div>
-<div class="hsec"><div class="hsec-t">Выбор и навигация</div>
-<div class="hrow"><span class="hk">V</span><span class="hd"><b>Выбор</b> · Ctrl+клик — перебор объектов · Shift+клик — добавить/убрать.</span></div>
-<div class="hrow"><span class="hk">направл.</span><span class="hd"><b>Перетаскивание направляющей</b> — тянем за синий кружок: обычный drag = параллельный сдвиг, <b>Shift+drag</b> = свободный поворот вокруг якоря. Двойной клик по кружку — редактирование в диалоге.</span></div>
-<div class="hrow"><span class="hk">рамка</span><span class="hd">Слева направо — полное вхождение (синяя); справа налево — пересечение (красная).</span></div>
-<div class="hrow"><span class="hk">H / Пробел</span><span class="hd"><b>Рука</b> — панорамирование; средняя кнопка мыши — тоже.</span></div>
-<div class="hrow"><span class="hk">колесо</span><span class="hd">Масштаб к курсору · клик по % — 1:1 · 0 — показать всё.</span></div>
-<div class="hrow"><span class="hk">2D / ISO</span><span class="hd">В ISO замкнутые контуры — псевдо-3D тела толщиной H мм (клавиша <b>3</b>).</span></div>
+
+<!-- ═══════════ 2. РИСОВАНИЕ ═══════════ -->
+<div class="help-pane" data-p="draw">
+  <div class="hsec2"><div class="hsec2-t">Инструменты рисования</div>
+
+    <div class="hex"><b>Ручка (<span class="hkbd">P</span>).</b> Клик — ставит точку. Клик + протянуть — кривая Безье: точка появления — якорь, куда тянете — направление ручки. Клик по первой точке — замкнуть контур. <span class="hkbd">Enter</span> — завершить. <span class="hkbd">Esc</span> — отменить. Курсор примагничивается к сетке и OSNAP-точкам в реальном времени, длина сегмента показывается рядом с курсором.</div>
+
+    <div class="hex"><b>Отрезок (<span class="hkbd">L</span>).</b> Тяните от начала к концу. <b>Shift</b> — угол кратно 45°.</div>
+
+    <div class="hex"><b>Дуга (<span class="hkbd">C</span>).</b> Три клика: центр → начало → конец. <b>Shift</b> — угол кратно 15°. Радиус и угол сектора видны возле курсора.</div>
+
+    <div class="hex"><b>Прямоугольник (<span class="hkbd">R</span>)</b> и <b>эллипс (<span class="hkbd">E</span>).</b> Тяните по диагонали габарита. <b>Shift</b> — квадрат/круг.</div>
+
+    <div class="hex"><b>Многоугольник (<span class="hkbd">O</span>).</b> Тяните от центра — радиус и угол следуют за курсором. <b>Shift</b> — поворот с шагом 15°. Клик без протяжки создаёт многоугольник с фиксированным радиусом (заданным в карточке).</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Импорт из других CAD</div>
+    <div class="hex">Кнопка <b>«Импорт»</b> в верхнем тулбаре. Поддерживаются <b>SVG</b>, <b>DXF</b>, <b>EPS</b>.</div>
+    <div class="hex"><b>SVG.</b> Все фигуры <code>&lt;path&gt;</code>, <code>rect</code>, <code>circle</code>, <code>ellipse</code>, <code>polygon</code> превращаются в контуры. Единицы (mm/cm/in/pt/px) читаются из атрибутов. Если единицы не указаны — координаты берутся как миллиметры.</div>
+    <div class="hex"><b>DXF.</b> Читаются LINE, LWPOLYLINE, POLYLINE, CIRCLE, ARC, ELLIPSE, SPLINE. Единицы — из переменной <code>$INSUNITS</code>. Bulge-дуги разворачиваются в кривые Безье.</div>
+    <div class="hex"><b>EPS.</b> Извлекаются только контуры (moveto / lineto / curveto). Растровые вставки игнорируются.</div>
+    <div class="hex-ok"><b>После импорта</b> контуры могут содержать дуги и сплайны — их стоит <b>линеаризовать</b> (кнопка в правой панели или контекстное меню) с допуском 0.05–0.1 мм. Это ускорит расчёт мозаики и сделает G-code проще.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Направляющие и сетка</div>
+    <div class="hex">Двойной клик по синему бейджу в правом верхнем углу холста — создать горизонтальную (H) или вертикальную (V) направляющую. Направляющая бесконечна, есть привязка к ней.</div>
+    <div class="hex">Перетаскивание за синий кружок: обычный drag — параллельный сдвиг, <b>Shift+drag</b> — поворот вокруг якоря. При наведении на OSNAP-точку направляющая «прыгает» ровно через неё.</div>
+    <div class="hex">Чип <b>«Сетка ▾»</b> в статусбаре — показать/скрыть сетку, включить магнит, задать шаг. Там же тумблер «Показывать размеры».</div>
+    <div class="hex">Чип <b>«OSNAP ▾»</b> — объектная привязка: конечные точки, середины, центры, квадранты, пересечения, перпендикуляры, касательные, ближайшие. Все они работают одновременно, приоритет — как в AutoCAD.</div>
+  </div>
 </div>
-<div class="hsec"><div class="hsec-t">Объектная привязка (OSNAP)</div>
-<div class="hrow"><span class="hk">OSNAP</span><span class="hd">Чип в статусбаре. Режимы: <b>конечные точки</b>, <b>середины</b>, <b>центры</b>, <b>квадранты</b>, <b>пересечения</b>, <b>перпендикуляры</b>, <b>касательные</b>, <b>ближайшие</b>. Найденная точка помечается зелёным маркером и подписью.</span></div>
-<div class="hrow"><span class="hk">радиус</span><span class="hd">Радиус захвата задаётся там же (по умолчанию 12 px).</span></div>
+
+<!-- ═══════════ 3. РЕДАКТИРОВАНИЕ ═══════════ -->
+<div class="help-pane" data-p="edit">
+  <div class="hsec2"><div class="hsec2-t">Узлы и кривые</div>
+    <div class="hex"><b>Узлы (<span class="hkbd">A</span>).</b> Двойной клик по контуру — войти в редактор. Тяните узлы и ручки Безье. Двойной клик по узлу — переключить «сглаженный/острый». Двойной клик по сегменту — вставить узел. <b>Alt</b> ломает симметрию ручек.</div>
+    <div class="hex"><b>Скругление угла.</b> Выделите узел, в карточке «Узел» задайте радиус и нажмите «Угол». Скругление всех углов сразу — в свойствах объекта.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Ножницы (<span class="hkbd">D</span>)</div>
+    <div class="hex">Три режима в hero-карточке:</div>
+    <div class="hex"><b>Сегмент.</b> Клик удаляет сегмент между соседними узлами. Замкнутый контур размыкается, открытый делится надвое.</div>
+    <div class="hex"><b>До линии.</b> Клик удаляет участок от точки клика до <b>ближайшего</b> пересечения с другим контуром или направляющей. Если пересечений нет — работает как «Сегмент».</div>
+    <div class="hex"><b>Между линиями.</b> Клик удаляет участок между двумя пересечениями, охватывающими точку клика. Если пересечений нет — тоже fallback на «Сегмент».</div>
+    <div class="hex-ok"><b>Ножницы видят размеры.</b> Если под курсором размерная линия — ножницы её подсветят красным и удалят целиком (не по частям), даже в режиме «Сегмент».</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Нож (<span class="hkbd">K</span>)</div>
+    <div class="hex">Соединяет две <b>замкнутые</b> фигуры мостиком. Клик по 1-й фигуре (в точке разреза), затем по 2-й. Обе разрежутся в точках клика и сомкнутся в один контур. Фигуры не должны пересекаться — программа это проверит.</div>
+    <div class="hex">Применение: сделать «очки» из двух отдельных кругов, соединить деталь с «полем» листа для удержания, собрать сложную фигуру из простых.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Смыкание векторов (<span class="hkbd">J</span>)</div>
+    <div class="hex">Для <b>открытых</b> контуров. Клик по концу первого вектора, затем по концу второго. Если концы совпадают (в пределах допуска) — они сливаются в одну точку. Если нет — соединяются отрезком.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Булевы операции</div>
+    <div class="hex"><b>Объединение</b>, <b>Вычитание</b>, <b>Пересечение</b> — в правой панели или на панели свойств. Работают по алгоритму Greiner-Hormann. Только для замкнутых контуров.</div>
+    <div class="hex-warn"><b>Вычитание</b>: порядок важен — <b>первая фигура (по номеру слоя) вычитается из второй</b>. То есть A−B: сначала выделите A, потом B.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Отступ (эквидистанта) (<span class="hkbd">U</span>)</div>
+    <div class="hex">Строит параллельную линию на заданном расстоянии. Направление — «внешний» / «внутренний». Тип углового соединения — острый (miter), круглый (round), фаска (bevel).</div>
+    <div class="hex">Замкнутые фигуры сначала объединяются (если их несколько), затем отступ идёт от общего силуэта. Открытые полилинии получают параллельную линию.</div>
+    <div class="hex">«Удалять самопересечения» — включено по умолчанию. При больших отступах и вогнутых фигурах отключать только если осознанно нужно получить «петли».</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Массив копий (<span class="hkbd">Shift+A</span>)</div>
+    <div class="hex"><b>Прямоугольный</b> — колонки × ряды с шагом по X/Y. <b>Полярный</b> — поворот на полный угол с N позициями (включая оригинал). В полярном режиме клик по холсту задаёт центр вращения.</div>
+    <div class="hex">Оригинал не дублируется — создаются только новые позиции. Все копии выделяются автоматически, чтобы сразу можно было их перетащить или скорректировать.</div>
+  </div>
 </div>
-<div class="hsec"><div class="hsec-t">Редактирование формы</div>
-<div class="hrow"><span class="hk">A</span><span class="hd"><b>Узлы</b> · 2×клик по узлу — сгладить/острый · по сегменту — добавить узел · Alt ломает симметрию ручек.</span></div>
-<div class="hrow"><span class="hk">D</span><span class="hd"><b>Ножницы</b> · режим «Сегмент» — удаляет сегмент между соседними узлами · режим «Обрезка» — удаляет участок до ближайших пересечений с другими контурами или направляющими. Если пересечений нет — работает как сегмент.</span></div>
-<div class="hrow"><span class="hk">J</span><span class="hd"><b>Смыкание векторов</b>.</span></div>
-<div class="hrow"><span class="hk">K</span><span class="hd"><b>Нож</b> — разрез и соединение двух замкнутых фигур мостиком.</span></div>
-<div class="hrow"><span class="hk">S</span><span class="hd"><b>Начальная точка</b> реза.</span></div>
-<div class="hrow"><span class="hk">I</span><span class="hd"><b>Развернуть вектор</b>.</span></div>
-<div class="hrow"><span class="hk">U</span><span class="hd"><b>Отступ</b> — эквидистанта внутрь/наружу.</span></div>
-<div class="hrow"><span class="hk">Q</span><span class="hd"><b>Линейка</b> — расстояние, угол, диаметр по 3 точкам.</span></div>
-<div class="hrow"><span class="hk">⟳</span><span class="hd"><b>Линеаризация</b> — замена дуг и Безье ломаной.</span></div>
+
+<!-- ═══════════ 4. РАЗМЕРЫ ═══════════ -->
+<div class="help-pane" data-p="dim">
+  <div class="hsec2"><div class="hsec2-t">Инструмент «Размер» (Shift+D)</div>
+    <div class="hex">Соответствует ГОСТ 2.307-2011. Шесть типов размеров — капсульный переключатель в hero-карточке:</div>
+    <div class="hex"><b>H — горизонтальный.</b> 3 клика: точка 1 → точка 2 → положение размерной линии (сверху или снизу от точек). Текст читается горизонтально.</div>
+    <div class="hex"><b>V — вертикальный.</b> 3 клика, текст повёрнут на −90° (читается сбоку).</div>
+    <div class="hex"><b>A — параллельный.</b> 3 клика, размерная линия идёт вдоль вектора точки 1 → точка 2.</div>
+    <div class="hex"><b>∠ — угловой.</b> 3 клика: вершина → 1-й луч → 2-й луч. Строится дуга со стрелками и градусами.</div>
+    <div class="hex"><b>R — радиус.</b> 1 клик по окружности/дуге. Автоматически находит круг.</div>
+    <div class="hex"><b>⌀ — диаметр.</b> 1 клик по окружности, линия через центр с двумя стрелками.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Настройки в карточке</div>
+    <div class="hex"><b>Высота шрифта</b> — в миллиметрах. По умолчанию 3.5 мм (стандарт ГОСТ). Сетка, размерная линия и текст масштабируются вместе с чертежом.</div>
+    <div class="hex"><b>Показывать все размеры</b> — глобальный тумблер. Дублируется кнопкой в правой панели и чекбоксом в меню «Сетка».</div>
+    <div class="hex"><b>Результат возле курсора</b> — при построении рядом с мышью всплывает оранжевый бейдж с текущим значением (длина, угол, R, ⌀). Удобно для быстрой проверки, не доводя построение до конца.</div>
+    <div class="hex"><b>Удалить все размеры</b> — очищает массив размеров одним движением.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Удаление отдельного размера</div>
+    <div class="hex">Инструментом «Ножницы» (<span class="hkbd">D</span>). Подведите курсор к размерной линии — она подсветится красным, появится метка «УДАЛИТЬ». Клик — размер удаляется целиком.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Взаимодействие с другими инструментами</div>
+    <div class="hex">Размеры <b>не попадают</b> в G-code и траекторию реза — это чисто аннотации чертежа.</div>
+    <div class="hex">Размеры <b>экспортируются в SVG</b> (если включены) — тонкими линиями 0.25 мм с текстом 3.5 мм.</div>
+    <div class="hex">В режиме <b>ISO</b> размеры автоматически скрываются — на псевдо-3D они выглядят плоскими и мешают.</div>
+    <div class="hex-warn"><b>Внимание.</b> Размеры не привязаны к геометрии динамически. Если вы измените форму объекта после создания размера, число останется старым. Пересоздайте размер или пользуйтесь инструментом «Узлы» только для предварительной подготовки, а размеры ставьте в конце.</div>
+  </div>
+
+  <div class="recipe">
+    <div class="recipe-h"><span class="badge">Пример</span> Чертёж пластины с четырьмя отверстиями</div>
+    <div class="hstep"><span class="num">1</span><span class="txt">Нарисуйте прямоугольник 300×200 и четыре круга ⌀10 в углах.</span></div>
+    <div class="hstep"><span class="num">2</span><span class="txt"><span class="hkbd">Shift+D</span> → тип <b>H</b> → клик по левому верхнему и правому верхнему углу → 3-й клик выше прямоугольника. Появится размер «300.0».</span></div>
+    <div class="hstep"><span class="num">3</span><span class="txt">Переключите тип на <b>V</b>, поставьте вертикальный размер «200.0» слева от прямоугольника.</span></div>
+    <div class="hstep"><span class="num">4</span><span class="txt">Тип <b>⌀</b> → клик по любому отверстию. Появится «⌀ 10.0».</span></div>
+    <div class="hstep"><span class="num">5</span><span class="txt">Тип <b>R</b> → клик по тому же отверстию. Появится «R 5.0» — рядом с ⌀, но на другой стороне.</span></div>
+    <div class="hstep"><span class="num">6</span><span class="txt">Экспорт SVG — чертёж с размерами готов для печати.</span></div>
+  </div>
 </div>
-<div class="hsec"><div class="hsec-t">Трансформации</div>
-<div class="hrow"><span class="hk">F</span><span class="hd"><b>Трансформация</b> — 8 маркеров · Shift за угол — пропорции.</span></div>
-<div class="hrow"><span class="hk">W</span><span class="hd"><b>Вращение</b> — шаг 5°.</span></div>
-<div class="hrow"><span class="hk">M</span><span class="hd"><b>Масштаб</b> от закреплённого угла.</span></div>
-<div class="hrow"><span class="hk">⇧M</span><span class="hd"><b>Зеркально</b> — отражает выделенные объекты относительно вертикальной оси, проходящей через центр их габарита. Направление обхода контуров инвертируется.</span></div>
-<div class="hrow"><span class="hk">стрелки</span><span class="hd">Сдвиг на «Шаг» · Shift+стрелки — ×10.</span></div>
+
+<!-- ═══════════ 5. СЛОИ И РЕЗКА ═══════════ -->
+<div class="help-pane" data-p="layers">
+  <div class="hsec2"><div class="hsec2-t">Порядок резки = порядок слоёв</div>
+    <div class="hex">Вкладка <b>«Слои»</b> в правой панели. Номер в оранжевом бейдже — это порядок резки в G-code: 1 режется первым, 2 — вторым, и так далее.</div>
+    <div class="hex">Перетаскивайте строки вверх-вниз для изменения порядка. Сверху — самая верхняя в списке, режется первой.</div>
+    <div class="hex-ok"><b>Правило:</b> сначала режутся <b>внутренние</b> контуры (отверстия), потом внешние. Иначе, отрезав деталь от заготовки, вы не сможете вырезать внутри неё.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Видимость и участие в G-code</div>
+    <div class="hex"><b>Глаз 👁</b> — показать/скрыть объект на холсте. Скрытые объекты не попадают в G-code.</div>
+    <div class="hex"><b>Огонь 🔥</b> — участвует ли объект в G-code. Если выключено — контур виден, но станок его не режет. Удобно для вспомогательных контуров (например, разметка).</div>
+    <div class="hex">Флаги применяются к группе <b>рекурсивно</b>: выключите огонь у группы — выключится у всех её детей.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Группы</div>
+    <div class="hex"><b>Ctrl+G</b> — группировать выделенные. <b>Ctrl+Shift+G</b> — разгруппировать. Группа обрабатывается как единое целое: клик выделяет всю группу, а не отдельный контур.</div>
+    <div class="hex">В мозаике каждая группа считается за одну деталь — все её контуры раскладываются вместе.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Рабочее поле станка</div>
+    <div class="hex">Вкладка «Слои» → блок «Рабочее поле станка». Включите рамку — появится фантом границ станка с затемнением за пределами. На G-code и объекты не влияет, но помогает визуально контролировать, влезает ли деталь.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Начальная точка реза</div>
+    <div class="hex"><b><span class="hkbd">S</span></b> — клик по узлу делает его точкой врезки. Проволока придёт в неё, включится, начнёт рез. Для замкнутых контуров это точка начала обхода.</div>
+    <div class="hex">Точка врезки помечается оранжевым кружком и подписью «СТАРТ».</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Разворот вектора (<span class="hkbd">I</span>)</div>
+    <div class="hex">Меняет направление обхода контура. Стрелки направления появятся на холсте. Иногда важно для совместимости с постпроцессором станка (по часовой vs против часовой).</div>
+  </div>
 </div>
+
+<!-- ═══════════ 6. G-CODE ═══════════ -->
+<div class="help-pane" data-p="cam">
+  <div class="hsec2"><div class="hsec2-t">Основные параметры</div>
+    <div class="hex"><b>Подача реза</b> — мм/мин. Типичные значения для нихрома и EPS: 100–400 мм/мин в зависимости от толщины и плотности.</div>
+    <div class="hex"><b>Холостой ход</b> — скорость быстрых перемещений между контурами. Обычно 2000–3000 мм/мин.</div>
+    <div class="hex"><b>Команда ВКЛ / ВЫКЛ проволоки</b> — M-коды или любые строки, которые понимает контроллер. По умолчанию <code>M3 S1000</code> и <code>M5</code>. Часто используют команды управления реле или ШИМ.</div>
+    <div class="hex"><b>Задержка прогрева</b> — пауза G4 Pn после включения проволоки, чтобы нихром нагрелся до рабочей температуры. Типично 1–2 секунды.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Компенсация пропила (kerf)</div>
+    <div class="hex">Учёт толщины реза. Проволока диаметром 0.3 мм с учётом оплавления даёт пропил ~0.4–0.5 мм.</div>
+    <div class="hex"><b>Выкл</b> — траектория идёт точно по контуру. Проволока уносит материал в стороны, готовая деталь окажется на 0.2 мм меньше с каждой стороны.</div>
+    <div class="hex"><b>Снаружи</b> — проволока смещается <b>наружу</b> от контура. Так, чтобы готовая деталь точно попала в размер. Так режут внешние контуры.</div>
+    <div class="hex"><b>Внутри</b> — проволока смещается внутрь. Так режут отверстия — чтобы готовое отверстие было ровно по чертежу.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Привязка к нулю</div>
+    <div class="hex">«Привязать задание к нулю» — все координаты сдвигаются так, чтобы левый нижний угол габарита выделенного попал в точку, отстоящую от (0;0) на величину «Отступ от края».</div>
+    <div class="hex">Удобно, когда нужно начинать рез от конкретного угла листа. Отключите, если контуры уже в нужных координатах.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Врезка через точку</div>
+    <div class="hex">Если включено — все замкнутые контуры режутся из одной общей точки <code>(X, Y)</code>. Проволока сначала проходит в неё холостым ходом, потом идёт к первому контуру, режет его, возвращается, следующий контур — снова из этой точки.</div>
+    <div class="hex">Актуально, если проволока должна входить в материал только в одном месте (например, режется «пакет» деталей из одной заготовки).</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Имена файлов</div>
+    <div class="hex">Шаблон имени в формате <code>{placeholder}</code>. По умолчанию <code>{project}_{date}_{time}_{seq}</code>.</div>
+    <div class="hex">Доступные плейсхолдеры: <code>{date} {time} {year} {month} {day} {hour} {min} {sec} {seq} {project} {material} {thickness} {user} {contours} {feed} {sheet} {sheets}</code>. Кнопка «+» рядом с полем — быстрая вставка плейсхолдера.</div>
+    <div class="hex"><b>Суточный счётчик</b> — обнуляется каждый день в 00:00. Удобно для нумерации партий.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Симулятор (T)</div>
+    <div class="hex">Панель внизу холста. Зелёная линия — уже отрезанный путь, красная точка — текущая позиция проволоки. Скорость воспроизведения 1× — 60×. Если траектория пересекается с чем-то — сразу видно.</div>
+    <div class="hex"><b>Используйте симулятор всегда</b> перед отправкой файла на станок.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Калькулятор резки</div>
+    <div class="hex">Иконка калькулятора в верхнем тулбаре. Считает температуру нихрома, необходимую мощность, скорость резания по формулам: диаметр проволоки, длина, плотность пены, толщина листа, напряжение блока питания, КПД.</div>
+    <div class="hex">Строит график «скорость резания vs толщина пены» — удобно понять, насколько медленнее придётся резать толстый блок.</div>
+  </div>
 </div>
-<div>
-<div class="hsec"><div class="hsec-t">Мозаика (nesting)</div>
-<div class="hrow"><span class="hk">Shift+N</span><span class="hd"><b>Разложить</b> выделенные замкнутые детали по листам. Группы обрабатываются как одна деталь.</span></div>
-<div class="hrow"><span class="hk">шаг угла</span><span class="hd">0 / 90 / 45 / 30 / 15 / 10 / 5°. Меньше шаг — плотнее раскладка, но дольше расчёт.</span></div>
-<div class="hrow"><span class="hk">доводка</span><span class="hd">После раскладки алгоритм пробует довернуть каждую деталь на ±δ и уплотнить лист «гравитацией».</span></div>
-<div class="hrow"><span class="hk">зеркало</span><span class="hd">Разрешает зеркальные копии деталей — резко повышает заполнение. Меняет направление обхода контура.</span></div>
-<div class="hrow"><span class="hk">попытки</span><span class="hd">Число стратегий порядка (5 детерминированных + случайные перестановки). Ограничено лимитом времени.</span></div>
+
+<!-- ═══════════ 7. МОЗАИКА ═══════════ -->
+<div class="help-pane" data-p="nest">
+  <div class="hsec2"><div class="hsec2-t">Что такое nesting</div>
+    <div class="hex">Автоматическая раскладка нескольких деталей на лист материала, чтобы заполнить его максимально плотно. Помогает сократить отходы.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Быстрый запуск</div>
+    <div class="hstep"><span class="num">1</span><span class="txt">Выделите <b>замкнутые</b> детали (открытые контуры игнорируются).</span></div>
+    <div class="hstep"><span class="num">2</span><span class="txt">Нажмите <span class="hkbd">Shift+N</span> или кнопку «Мозаика» в правой панели.</span></div>
+    <div class="hstep"><span class="num">3</span><span class="txt">В карточке задайте размер листа (например, 1000×500 мм), зазор между деталями (4–8 мм) и шаг поворота.</span></div>
+    <div class="hstep"><span class="num">4</span><span class="txt">Нажмите «Разложить». Дождитесь завершения — появится предпросмотр.</span></div>
+    <div class="hstep"><span class="num">5</span><span class="txt">Если результат устраивает — «Применить». Понравилось не полностью — «Ещё вариант» пересчитывает с другим порядком.</span></div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Параметры, которые влияют на результат</div>
+    <div class="hex"><b>Шаг угла.</b> 0° — детали не вращаются (быстро). 90° — только прямые повороты. 15° — компромисс (типично). 5° — плотнее, но медленнее.</div>
+    <div class="hex"><b>Зеркалирование.</b> Разрешает зеркальные копии — часто даёт +10–20 % заполнения, но меняет направление обхода у отражённых копий (проверьте G-code).</div>
+    <div class="hex"><b>Доводка углов.</b> После раскладки алгоритм доворачивает каждую деталь на ±δ / ±2δ и уплотняет «гравитацией». Занимает время, но даёт лучшее заполнение.</div>
+    <div class="hex"><b>Попытки.</b> Сколько стратегий порядка пробовать. Меньше попыток — быстрее расчёт, но хуже укладка.</div>
+    <div class="hex"><b>Лимит времени.</b> Максимум секунд на расчёт. Если за это время нашлась лучшая раскладка — она применяется; если нет — что успело.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Отчёт</div>
+    <div class="hex">После расчёта — карточка с числами: сколько листов использовано, сколько деталей разложено, заполнение материала (в %), высота занятой зоны, отходы. Если какие-то детали не влезли — они перечислены отдельно.</div>
+    <div class="hex-ok"><b>Хороший результат</b> — заполнение 60–75 % при разумном зазоре. Больше 80 % — уже уплотнённая укладка, обычно у нестандартных форм.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">После применения</div>
+    <div class="hex">Детали физически переместятся на холсте. Их можно снова выделить, скорректировать, переместить между листами. Листы рисуются как «плитки» на холсте — по одной на лист.</div>
+    <div class="hex-warn">Мозаика — тяжёлая операция. При большом числе деталей и мелком шаге угла браузер может подвиснуть на 5–10 секунд. Закрывайте лишние вкладки, дайте браузеру больше памяти.</div>
+  </div>
 </div>
-<div class="hsec"><div class="hsec-t">Слои и группы</div>
-<div class="hrow"><span class="hk">номер</span><span class="hd">Номер слоя = порядок резки в G-code.</span></div>
-<div class="hrow"><span class="hk">drag&drop</span><span class="hd">Перетаскивание строк меняет порядок резки.</span></div>
-<div class="hrow"><span class="hk">Ctrl+G</span><span class="hd">Группировать · <b>Ctrl+Shift+G</b> — разгруппировать.</span></div>
-<div class="hrow"><span class="hk">Ctrl+D</span><span class="hd">Дублировать.</span></div>
-<div class="hrow"><span class="hk">👁 / 🔥</span><span class="hd">Видимость и участие в G-code.</span></div>
+
+<!-- ═══════════ 8. ФАЙЛЫ ═══════════ -->
+<div class="help-pane" data-p="files">
+  <div class="hsec2"><div class="hsec2-t">Каталог проектов</div>
+    <div class="hex">Вкладка <b>«Файлы»</b> справа. Все проекты хранятся в <b>localStorage браузера</b> — не в облаке. Локально, приватно, но при очистке кэша браузера проекты пропадут.</div>
+    <div class="hex"><b>+ Новый</b> — создать проект. Имя подставляется по шаблону из настроек (по умолчанию — дата + суточный счётчик). Можно начать с пустого или с копии текущего.</div>
+    <div class="hex"><b>Сохранить</b> — скачать активный проект как <code>.json</code>. Используйте для бэкапа или переноса на другой компьютер.</div>
+    <div class="hex"><b>Настройки (иконка ползунков)</b> — шаблон автоименования проектов. Плейсхолдеры такие же, как у G-code: <code>{date} {time} {seq} {user}</code> и др.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Работа с карточками</div>
+    <div class="hex"><b>Один клик</b> — открыть проект (появится подтверждение). <b>Двойной клик</b> по имени — переименовать. <b>ПКМ</b> — контекстное меню (открыть, дублировать, скачать .json, удалить).</div>
+    <div class="hex"><b>Вид «Сетка/Список»</b> — переключатель в правом верхнем углу вкладки. <b>Сортировка</b> — капсульный переключатель «Новые / Старые / Имя».</div>
+    <div class="hex"><b>Поиск</b> — по имени проекта, регистронезависимый.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Автосохранение</div>
+    <div class="hex">Активный проект сохраняется автоматически — каждое изменение через 600 мс, плюс раз в 30 секунд, плюс при закрытии вкладки браузера.</div>
+    <div class="hex">Если браузер вылетел или вы закрыли вкладку случайно — при следующем открытии проект восстановится из автосохранения. Программа создаст его с именем <b>«Восстановленный»</b>, если активного не было.</div>
+    <div class="hex-warn"><b>Резервная копия.</b> Если проект особенно важный — скачайте его .json вручную (кнопка «Сохранить» или «Скачать .json» в ПКМ-меню карточки). Это единственный надёжный бэкап.</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Импорт и экспорт</div>
+    <div class="hex"><b>Импорт</b> — верхняя панель, кнопка со стрелкой вверх. Поддерживаются SVG, DXF, EPS. Импортируется как набор контуров, не как отдельный проект. Сохраняется в текущий проект.</div>
+    <div class="hex"><b>Экспорт SVG</b> — верхняя панель, иконка картинки. Экспортирует <b>все видимые объекты</b> + (если включены) размеры. 1 единица SVG = 1 мм. Размеры идут тонкими линиями 0.25 мм.</div>
+    <div class="hex"><b>G-code</b> — верхняя панель, оранжевая кнопка. Скачивание зависит от поддержки File System Access API: Chrome / Edge → в выбранную папку, Firefox / Safari → в «Загрузки».</div>
+  </div>
+
+  <div class="hsec2"><div class="hsec2-t">Горячие сочетания (файлы)</div>
+    <div class="hex"><span class="hkbd">Ctrl+S</span> — скачать .json активного проекта. <span class="hkbd">Ctrl+Z / Ctrl+Y</span> — отменить/повторить. Автосохранение при этом работает параллельно и независимо.</div>
+  </div>
 </div>
-<div class="hsec"><div class="hsec-t">Файл и проект</div>
-<div class="hrow"><span class="hk">Ctrl+S</span><span class="hd">Сохранить .json.</span></div>
-<div class="hrow"><span class="hk">импорт</span><span class="hd">SVG, DXF, EPS.</span></div>
-<div class="hrow"><span class="hk">экспорт</span><span class="hd">SVG — видимые контуры, 1 ед. = 1 мм.</span></div>
-<div class="hrow"><span class="hk">Ctrl+Z / Y</span><span class="hd">Отменить / повторить.</span></div>
-<div class="hrow"><span class="hk">авто</span><span class="hd">Проект автосохраняется в localStorage.</span></div>
+
+<!-- ═══════════ 9. ГОРЯЧИЕ КЛАВИШИ ═══════════ -->
+<div class="help-pane" data-p="keys">
+  <div class="help-cols">
+    <div>
+      <div class="hsec"><div class="hsec-t">Инструменты</div>
+        <div class="hrow"><span class="hk">V</span><span class="hd">Выбор</span></div>
+        <div class="hrow"><span class="hk">H / Пробел</span><span class="hd">Рука (панорамирование)</span></div>
+        <div class="hrow"><span class="hk">P</span><span class="hd">Ручка / кривые Безье</span></div>
+        <div class="hrow"><span class="hk">L</span><span class="hd">Отрезок</span></div>
+        <div class="hrow"><span class="hk">C</span><span class="hd">Дуга (центр + 2 точки)</span></div>
+        <div class="hrow"><span class="hk">R</span><span class="hd">Прямоугольник</span></div>
+        <div class="hrow"><span class="hk">E</span><span class="hd">Эллипс</span></div>
+        <div class="hrow"><span class="hk">O</span><span class="hd">Многоугольник</span></div>
+        <div class="hrow"><span class="hk">A</span><span class="hd">Узлы</span></div>
+        <div class="hrow"><span class="hk">D</span><span class="hd">Ножницы</span></div>
+        <div class="hrow"><span class="hk">J</span><span class="hd">Смыкание векторов</span></div>
+        <div class="hrow"><span class="hk">K</span><span class="hd">Нож</span></div>
+        <div class="hrow"><span class="hk">F</span><span class="hd">Трансформация</span></div>
+        <div class="hrow"><span class="hk">W</span><span class="hd">Вращение</span></div>
+        <div class="hrow"><span class="hk">M</span><span class="hd">Масштаб</span></div>
+        <div class="hrow"><span class="hk">U</span><span class="hd">Отступ</span></div>
+        <div class="hrow"><span class="hk">S</span><span class="hd">Начальная точка реза</span></div>
+        <div class="hrow"><span class="hk">I</span><span class="hd">Развернуть вектор</span></div>
+        <div class="hrow"><span class="hk">Q</span><span class="hd">Линейка</span></div>
+        <div class="hrow"><span class="hk">⇧D</span><span class="hd">Размер (ГОСТ)</span></div>
+        <div class="hrow"><span class="hk">⇧A</span><span class="hd">Массив копий</span></div>
+        <div class="hrow"><span class="hk">⇧N</span><span class="hd">Мозаика</span></div>
+      </div>
+
+      <div class="hsec"><div class="hsec-t">Файлы и история</div>
+        <div class="hrow"><span class="hk">Ctrl+S</span><span class="hd">Сохранить проект (.json)</span></div>
+        <div class="hrow"><span class="hk">Ctrl+Z</span><span class="hd">Отменить</span></div>
+        <div class="hrow"><span class="hk">Ctrl+Y</span><span class="hd">Повторить</span></div>
+        <div class="hrow"><span class="hk">Ctrl+C / V / X</span><span class="hd">Копировать / вставить / вырезать</span></div>
+        <div class="hrow"><span class="hk">Ctrl+D</span><span class="hd">Дублировать выделенное</span></div>
+        <div class="hrow"><span class="hk">Ctrl+A</span><span class="hd">Выделить всё</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="hsec"><div class="hsec-t">Правка формы</div>
+        <div class="hrow"><span class="hk">Ctrl+G</span><span class="hd">Группировать</span></div>
+        <div class="hrow"><span class="hk">Ctrl+⇧G</span><span class="hd">Разгруппировать</span></div>
+        <div class="hrow"><span class="hk">⇧M</span><span class="hd">Зеркально по вертикали</span></div>
+        <div class="hrow"><span class="hk">Стрелки</span><span class="hd">Сдвиг на шаг</span></div>
+        <div class="hrow"><span class="hk">⇧Стрелки</span><span class="hd">Сдвиг ×10</span></div>
+        <div class="hrow"><span class="hk">Del</span><span class="hd">Удалить выделенное</span></div>
+        <div class="hrow"><span class="hk">Esc</span><span class="hd">Отменить текущее действие</span></div>
+      </div>
+
+      <div class="hsec"><div class="hsec-t">Вид и режимы</div>
+        <div class="hrow"><span class="hk">2D / ISO</span><span class="hd">Переключить проекцию</span></div>
+        <div class="hrow"><span class="hk">3</span><span class="hd">Pseudo-3D в ISO</span></div>
+        <div class="hrow"><span class="hk">N</span><span class="hd">Номера слоёв на холсте</span></div>
+        <div class="hrow"><span class="hk">T</span><span class="hd">Симуляция G-code</span></div>
+        <div class="hrow"><span class="hk">G</span><span class="hd">Вкладка «Станок»</span></div>
+        <div class="hrow"><span class="hk">0</span><span class="hd">Показать всё</span></div>
+        <div class="hrow"><span class="hk">+ / −</span><span class="hd">Приблизить / отдалить</span></div>
+        <div class="hrow"><span class="hk">F11</span><span class="hd">Полный экран</span></div>
+        <div class="hrow"><span class="hk">?</span><span class="hd">Справка</span></div>
+      </div>
+
+      <div class="hsec"><div class="hsec-t">Мышь</div>
+        <div class="hrow"><span class="hk">колесо</span><span class="hd">Масштаб к курсору</span></div>
+        <div class="hrow"><span class="hk">СКМ</span><span class="hd">Панорама</span></div>
+        <div class="hrow"><span class="hk">ПКМ</span><span class="hd">Контекстное меню</span></div>
+        <div class="hrow"><span class="hk">Ctrl+ЛКМ</span><span class="hd">Перебор объектов под курсором</span></div>
+        <div class="hrow"><span class="hk">Shift+ЛКМ</span><span class="hd">Добавить/убрать из выделения</span></div>
+        <div class="hrow"><span class="hk">Alt+тянуть</span><span class="hd">Привязка «за центр габарита»</span></div>
+        <div class="hrow"><span class="hk">рамка →</span><span class="hd">Полное вхождение (синяя)</span></div>
+        <div class="hrow"><span class="hk">рамка ←</span><span class="hd">Пересечение (красная)</span></div>
+      </div>
+    </div>
+  </div>
 </div>
-<div class="hsec"><div class="hsec-t">G-code и симуляция</div>
-<div class="hrow"><span class="hk">вкладка</span><span class="hd">Все параметры станка — во вкладке «Станок» (клавиша G).</span></div>
-<div class="hrow"><span class="hk">T</span><span class="hd"><b>Симуляция</b>: пуск/пауза, перемотка, скорость 1…60×.</span></div>
+
 </div>
-<div class="hsec"><div class="hsec-t">Прочее</div>
-<div class="hrow"><span class="hk">ПКМ</span><span class="hd">Контекстное меню.</span></div>
-<div class="hrow"><span class="hk">Ctrl+C / V / X</span><span class="hd">Копировать / вставить / вырезать.</span></div>
-<div class="hrow"><span class="hk">Ctrl+A</span><span class="hd">Выделить все видимые объекты.</span></div>
-<div class="hrow"><span class="hk">Esc</span><span class="hd">Сброс текущего действия.</span></div>
-<div class="hrow"><span class="hk">N / 3 / F11 / ?</span><span class="hd">Номера слоёв · pseudo-3D · полный экран · справка.</span></div>
-</div>
-</div>
-</div></div>
 </div>
 </div>
 <div id="othelloModal" class="othello-modal">
@@ -10491,6 +10812,26 @@ bd.remove(); resolve(r);
 }
 function showHelp(){ $('#helpOverlay').classList.add('show'); }
 function hideHelp(){ $('#helpOverlay').classList.remove('show'); }
+
+/* Переключение вкладок внутри справки. */
+function bindHelpTabs(){
+  var tabs = $('#helpTabs');
+  if(!tabs) return;
+  tabs.onclick = function(e){
+    var b = e.target.closest('button[data-p]');
+    if(!b) return;
+    var p = b.dataset.p;
+    tabs.querySelectorAll('button').forEach(function(x){
+      x.classList.toggle('on', x.dataset.p === p);
+    });
+    var body = $('#helpOverlay .help-body');
+    if(!body) return;
+    body.querySelectorAll('.help-pane').forEach(function(pane){
+      pane.classList.toggle('on', pane.dataset.p === p);
+    });
+    try{ body.scrollTop = 0; }catch(err){}
+  };
+}
 /* ═══════════════ ТУЛБАРЫ ═══════════════ */
 var TOOLS=[
 {id:'select',   icon:'cursor',      name:'Выбор',                             key:'V'},
@@ -12799,7 +13140,7 @@ function bindCalcModalUI(){
 }
 /* ═══════════════ ИНИЦИАЛИЗАЦИЯ ═══════════════ */
 function init(){
-buildToolbar(); buildRightPanel(); buildTopbar(); buildSide(); buildNestCard(); buildStatus(); buildSimBar(); bindCam(); syncCamInputs(); bindOsnapUI(); bindGridPopover(); bindGuideUI(); bindFilesUI();
+buildToolbar(); buildRightPanel(); buildTopbar(); buildSide(); buildNestCard(); buildStatus(); buildSimBar(); bindCam(); syncCamInputs(); bindOsnapUI(); bindGridPopover(); bindGuideUI(); bindFilesUI(); bindHelpTabs();
 var clickCount=0, clickTimer=null;
 $('#logo').addEventListener('click',function(){
 clickCount++;
