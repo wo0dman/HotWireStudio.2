@@ -650,19 +650,17 @@ button.chip:hover{background:var(--fill)}
 .proj-view-seg button{min-width:30px;height:24px;padding:0 6px;border-radius:6px;display:flex;align-items:center;justify-content:center}
 .proj-view-seg button svg{width:13px;height:13px}
 
-.proj-sort-wrap{padding:0 14px 8px}
-.proj-sort{
-  width:100%;height:28px;font-size:11.5px;
-  background:#F4F4F8;border:1px solid transparent;border-radius:8px;
-  padding:0 26px 0 9px;color:var(--label);font-family:inherit;font-weight:500;
-  appearance:none;-webkit-appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238E8E93' fill='none' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 9px center;
-  outline:none;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;
-}
-.proj-sort:focus{background-color:#fff;border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,122,255,.18)}
+/* Отступ снизу — отделяет полосу сортировки от сетки эскизов.
+   position:relative + z-index — страхует от наложения на эскизы. */
+.proj-sort-wrap{padding:0 14px 10px;position:relative;z-index:2}
+.proj-sort-seg{width:100%}
+.proj-sort-seg button{height:28px;padding:0 6px;font-size:12px;font-weight:600}
 
-.proj-body{padding:0 14px 14px;max-height:540px;overflow-y:auto;overflow-x:hidden}
+/* Убрал max-height:540px и overflow — раньше это клиппировало сетку,
+   из-за чего нижние ряды эскизов «прятались» под строкой сортировки.
+   Скролл теперь делает родительский .tabpane, у которого уже есть
+   overflow-y:auto. */
+.proj-body{padding:0 14px 14px;position:relative;z-index:1}
 .proj-body.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .proj-body.list{display:flex;flex-direction:column;gap:1px}
 
@@ -1278,14 +1276,12 @@ button.chip:hover{background:var(--fill)}
     </div>
   </div>
 
-  <div class="proj-sort-wrap">
-    <select class="proj-sort" id="projSort">
-      <option value="modified">Сначала новые</option>
-      <option value="modifiedAsc">Сначала старые</option>
-      <option value="name">Имя — А → Я</option>
-      <option value="nameDesc">Имя — Я → А</option>
-      <option value="sizeDesc">Сначала большие</option>
-    </select>
+    <div class="proj-sort-wrap">
+    <div class="calc-seg proj-sort-seg" id="projSortSeg">
+      <button data-v="modified">Новые</button>
+      <button data-v="modifiedAsc">Старые</button>
+      <button data-v="name">Имя</button>
+    </div>
   </div>
 
   <div class="proj-body grid" id="projBody"></div>
@@ -12493,11 +12489,28 @@ function bindFilesUI(){
     projRenderList();
   });
 
-  /* Сортировка */
-  var sSort = $('#projSort');
-  if(sSort){
-    sSort.value = projState.sort;
-    sSort.onchange = function(){ projState.sort = sSort.value; projRenderList(); scheduleSave(); };
+    /* Сортировка — капсульный переключатель */
+  /* Если в сохранённом состоянии остался старый тип (sizeDesc/nameDesc) —
+     мягко мапим на доступный вариант. */
+  if(projState.sort === 'sizeDesc' || projState.sort === 'nameDesc'){
+    projState.sort = 'name';
+  }
+  var sortSeg = $('#projSortSeg');
+  if(sortSeg){
+    /* Первичная подсветка активной кнопки */
+    sortSeg.querySelectorAll('button[data-v]').forEach(function(b){
+      b.classList.toggle('on', b.dataset.v === projState.sort);
+    });
+    sortSeg.onclick = function(e){
+      var b = e.target.closest('button[data-v]');
+      if(!b) return;
+      projState.sort = b.dataset.v;
+      sortSeg.querySelectorAll('button[data-v]').forEach(function(x){
+        x.classList.toggle('on', x.dataset.v === projState.sort);
+      });
+      projRenderList();
+      scheduleSave();
+    };
   }
 
   /* Вид: сетка / список */
