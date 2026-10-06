@@ -5244,8 +5244,8 @@ var ACI={1:'#ff3b30',2:'#ff9500',3:'#34c759',4:'#5ac8fa',5:'#007aff',6:'#af52de'
 var bd=new PathBuilder();
 function readEntity(start){
 var type=pairs[start][1].toUpperCase();
-var ent={type:type, start:start}; 
-var ent={type:type}; var rep={}; var i=start+1;
+var ent={type:type, start:start};
+var rep={}; var i=start+1;
 while(i<pairs.length&&pairs[i][0]!==0){
 var c=pairs[i][0], v=pairs[i][1];
 if(c===10||c===20||c===11||c===21||c===40||c===42){(rep[c]=rep[c]||[]).push(v);}
