@@ -32,6 +32,7 @@ HotWire Studio · iOS-архитектура · светлая тема
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono/500.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono/600.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
 <style>
 :root{
 --bg:#F2F2F7; --card:#FFFFFF;
@@ -1239,6 +1240,7 @@ button.chip:hover{background:var(--fill)}
 <button class="rp-btn" id="rpDiff" data-tip="Вычитание (1-я из 2-й)"></button>
 <button class="rp-btn" id="rpIntersect" data-tip="Пересечение"></button>
 <div class="rail-cap">Объект</div>
+<button class="rp-btn" id="rpText" data-tip="Текст в кривые · Shift+T"></button>
 <button class="rp-btn" id="rpNest" data-tip="Мозаика — раскладка деталей · Shift+N"></button>
 <button class="rp-btn" id="btnGroup" data-tip="Группировать · Ctrl+G"></button>
 <button class="rp-btn icon-flip" id="btnUngroup" data-tip="Разгруппировать · Ctrl+Shift+G"></button>
@@ -2055,8 +2057,8 @@ mirrorAxis:'<path d="M12 3v18" stroke-width="1.6"/><circle cx="7" cy="7.5" r="2"
 compress:'<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
 cube:'<path d="M21 16V8l-9-5-9 5v8l9 5z"/><path d="m3.3 8.3 8.7 4.8 8.7-4.8M12 21v-7.9"/>',
 dimension:'<path d="M4 6v12M20 6v12"/><path d="M4 12h16" stroke-dasharray="3 2"/><path d="M7 10l-3 2 3 2M17 10l3 2-3 2"/>',
-calc:'<rect x="4.5" y="3" width="15" height="18" rx="2.5"/><rect x="7.5" y="6" width="9" height="3" rx=".7"/><circle cx="9" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="9" cy="16.5" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="16.5" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="16.5" r=".9" fill="currentColor" stroke="none"/>'
-
+calc:'<rect x="4.5" y="3" width="15" height="18" rx="2.5"/><rect x="7.5" y="6" width="9" height="3" rx=".7"/><circle cx="9" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="12.5" r=".9" fill="currentColor" stroke="none"/><circle cx="9" cy="16.5" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="16.5" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="16.5" r=".9" fill="currentColor" stroke="none"/>',
+textTool:'<path d="M4 7V5h16v2"/><path d="M12 5v14"/><path d="M9 19h6"/>'
 };
 function icon(n,s){
 s=s||18;
@@ -2110,6 +2112,34 @@ var pen=null, shapeDraft=null, drag=null, marq=null;
 /* ─── Режим ножниц ─── */
 var eraserMode = 'segment';    /* 'segment' | 'trimOne' | 'trimTwo' */
 var polySet={sides:6, rot:0, r:50};
+/* ─── Текст в кривые ─── */
+var textState = {
+content: 'Текст',
+fontSize: 20,
+letterSpacing: 0,
+font: null,
+fontName: 'Roboto',
+fontLoaded: false
+};
+/* Предустановленные шрифты (загружаются из CDN при выборе) */
+var PRESET_FONTS = [
+{name:'Roboto',        url:'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.ttf'},
+{name:'PT Sans',       url:'https://fonts.gstatic.com/s/ptsans/v17/jizaRExUiTo99u79D0KExQ.ttf'},
+{name:'PT Serif',      url:'https://fonts.gstatic.com/s/ptserif/v18/EJRVQgYoZZY2vCFuvAFWzro.ttf'},
+{name:'Open Sans',     url:'https://fonts.gstatic.com/s/opensans/v34/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVI.ttf'},
+{name:'Montserrat',    url:'https://fonts.gstatic.com/s/montserrat/v25/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aXo.ttf'},
+{name:'Oswald',        url:'https://fonts.gstatic.com/s/oswald/v49/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvgUFoZA.ttf'},
+{name:'Ubuntu',        url:'https://fonts.gstatic.com/s/ubuntu/v20/4iCs6KVjbNBYlgoKfw72.ttf'},
+{name:'Play',          url:'https://fonts.gstatic.com/s/play/v19/6aez4K2oVqwIjtI8Hp8Txw.ttf'},
+{name:'Russo One',     url:'https://fonts.gstatic.com/s/russoone/v14/Z9XUDmZRWg6M1LvRYsH-yMOInrib9Q.ttf'},
+{name:'Lobster',       url:'https://fonts.gstatic.com/s/lobster/v28/neILzCirqoswsqX9_oWsMqEzSJQ.ttf'},
+{name:'Caveat',        url:'https://fonts.gstatic.com/s/caveat/v18/WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9SIKjYBxPw.ttf'},
+{name:'Pacifico',      url:'https://fonts.gstatic.com/s/pacifico/v22/FwZY7-Qmy14u9lezJ-6H6MmBp0u-.ttf'},
+{name:'Press Start 2P',url:'https://fonts.gstatic.com/s/pressstart2p/v15/e3t4euO8T-267oIAQAu6jDQyK3nVivNm4I81.mp.ttf'},
+{name:'Courier New',   url:'https://fonts.gstatic.com/s/courierprime/v7/u-4k0q2lgwslOqpF_6gQ8kELY7pMT-Dfqw.ttf'},
+{name:'Georgia',       url:'https://fonts.gstatic.com/s/georgia/v1/rP2bp2a0C0CjOqXO2Hc6N1I.ttf'}
+];
+var fontCache = {};   /* кэш загруженных шрифтов: name → opentype.Font */
 var polyDraft=null;
 /* ─── Настройки отступа (offset v2) ─── */
 var offsetState = {
@@ -4219,7 +4249,8 @@ function focusToolCard(t){
         array:  'arrayCard',
         ruler:  'rulerCard',
        knife:  'knifeCard',
-    dimension: 'dimensionCard'
+    dimension: 'dimensionCard',
+    text:   'textCard'
     };
     var id = map[t];
     if(!id) return false;
@@ -4459,6 +4490,248 @@ c2x: P1.x - k*T1x, c2y: P1.y - k*T1y,
 r: r, ccw: ccw, sweep: dA
 };
 }
+/* ═══════════════ ТЕКСТ В КРИВЫЕ ═══════════════ */
+function loadFontByName(name, url){
+/* Если уже в кэше — используем сразу */
+if(fontCache[name]){
+textState.font = fontCache[name];
+textState.fontLoaded = true;
+textState.fontName = name;
+var lbl = $('#textFontLabel');
+if(lbl) lbl.textContent = name;
+return;
+}
+try{
+opentype.load(url, function(err, font){
+if(err){
+console.warn('Не удалось загрузить шрифт «'+name+'»:', err);
+toast('⚠ Шрифт «'+name+'» не загрузился', 'close');
+return;
+}
+fontCache[name] = font;
+textState.font = font;
+textState.fontLoaded = true;
+textState.fontName = name;
+var lbl = $('#textFontLabel');
+if(lbl) lbl.textContent = name;
+});
+}catch(e){ console.warn('opentype.js недоступен'); }
+}
+function loadDefaultFont(){
+if(textState.fontLoaded) return;
+loadFontByName('Roboto', PRESET_FONTS[0].url);
+}
+
+function loadFontFromFile(file){
+var reader = new FileReader();
+reader.onload = function(e){
+try{
+var font = opentype.parse(e.target.result);
+textState.font = font;
+textState.fontLoaded = true;
+textState.fontName = file.name.replace(/\.[^.]+$/, '');
+var lbl = $('#textFontLabel');
+if(lbl) lbl.textContent = textState.fontName;
+toast('Шрифт загружен: ' + textState.fontName, 'check');
+}catch(err){
+toast('⚠ Не удалось прочитать шрифт: ' + (err.message || 'ошибка'), 'close');
+}
+};
+reader.readAsArrayBuffer(file);
+}
+
+function textToContours(text, x, y, fontSize, spacing, font){
+if(!font || !text || !text.trim()) return [];
+var contours = [];
+var path = font.getPath(text, 0, 0, fontSize, {letterSpacing: spacing / fontSize});
+var cmds = path.commands;
+if(!cmds || !cmds.length) return contours;
+
+var currentPts = [];
+var curX = 0, curY = 0;
+
+function flushContour(){
+if(currentPts.length >= 3){
+/* Замыкаем контур */
+contours.push({pts: currentPts.slice(), closed: true});
+}
+currentPts = [];
+}
+
+for(var i = 0; i < cmds.length; i++){
+var c = cmds[i];
+switch(c.type){
+case 'M':
+if(currentPts.length >= 3) flushContour();
+currentPts = [];
+curX = c.x; curY = -c.y;
+currentPts.push(mkPoint(curX, curY));
+break;
+case 'L':
+var lx = c.x, ly = -c.y;
+if(currentPts.length > 0){
+var prev = currentPts[currentPts.length - 1];
+prev.ox = lx; prev.oy = ly;
+}
+curX = lx; curY = ly;
+var lp = mkPoint(curX, curY);
+lp.ix = curX; lp.iy = curY;
+currentPts.push(lp);
+break;
+case 'C':
+var c1x = c.x1, c1y = -c.y1;
+var c2x = c.x2, c2y = -c.y2;
+var cx3 = c.x, cy3 = -c.y;
+if(currentPts.length > 0){
+var prevC = currentPts[currentPts.length - 1];
+prevC.ox = c1x; prevC.oy = c1y;
+}
+curX = cx3; curY = cy3;
+var cp = mkPoint(curX, curY);
+cp.ix = c2x; cp.iy = c2y;
+currentPts.push(cp);
+break;
+case 'Q':
+var qx1 = c.x1, qy1 = -c.y1;
+var qx2 = c.x, qy2 = -c.y;
+if(currentPts.length > 0){
+var prevQ = currentPts[currentPts.length - 1];
+var pqx = prevQ.x, pqy = prevQ.y;
+var qc1x = pqx + 2/3 * (qx1 - pqx);
+var qc1y = pqy + 2/3 * (qy1 - pqy);
+var qc2x = qx2 + 2/3 * (qx1 - qx2);
+var qc2y = qy2 + 2/3 * (qy1 - qy2);
+prevQ.ox = qc1x; prevQ.oy = qc1y;
+curX = qx2; curY = qy2;
+var qp = mkPoint(curX, curY);
+qp.ix = qc2x; qp.iy = qc2y;
+currentPts.push(qp);
+}
+break;
+case 'Z':
+flushContour();
+break;
+}
+}
+if(currentPts.length >= 3) flushContour();
+return contours;
+}
+
+function placeTextAt(w){
+if(!textState.fontLoaded){
+toast('Сначала загрузите шрифт (.ttf / .otf)', 'close');
+return;
+}
+if(!textState.content || !textState.content.trim()){
+toast('Введите текст в панели справа', 'close');
+return;
+}
+var contours = textToContours(
+textState.content,
+w.x, w.y,
+textState.fontSize,
+textState.letterSpacing,
+textState.font
+);
+if(!contours.length){
+toast('Не удалось создать контуры из текста', 'close');
+return;
+}
+pushHistory();
+var ids = [];
+for(var i = 0; i < contours.length; i++){
+var c = contours[i];
+/* Сдвигаем к точке клика */
+var pts = c.pts.map(function(p){
+return {x: p.x + w.x, y: p.y + w.y, ix: p.ix + w.x, iy: p.iy + w.y, ox: p.ox + w.x, oy: p.oy + w.y};
+});
+var name = textState.content.length > 12
+? textState.content.substring(0, 12) + '…'
+: textState.content;
+var o = addObject(pts, true, name + ' (' + (i+1) + ')');
+ids.push(o.id);
+}
+selection = ids;
+afterChange();
+toast('Текст конвертирован: ' + contours.length + ' контуров', 'check');
+setTool('select');
+}
+
+function textCardHTML(){
+if(tool !== 'text') return '';
+return '<div class="card card-hero" id="textCard">'
++ '<div class="card-h"><span>Текст в кривые</span><span class="note">векторные контуры</span></div>'
++ '<div class="fld"><label>Текст</label>'
++ '<textarea class="inp mono" id="textContent" rows="2" spellcheck="false" placeholder="Введите текст…">'
++ esc(textState.content) + '</textarea></div>'
++ '<div class="fld"><label>Шрифт</label>'
++ '<select class="inp" id="textFontSelect">'
++ PRESET_FONTS.map(function(f){
+ return '<option value="'+f.name+'"'+(f.name===textState.fontName?' selected':'')+'>'+f.name+'</option>';
+ }).join('')
++ '</select>'
++ '<div style="margin-top:6px;display:flex;gap:6px;align-items:center">'
++ '<div style="flex:1;font-size:11px;color:var(--label2)" id="textFontLabel">'+esc(textState.fontName)+'</div>'
++ '<button class="btn tint" id="textFontFileBtn" style="flex:none;padding:0 10px;font-size:11px;height:28px">Файл…</button>'
++ '</div>'
++ '<input type="file" id="textFontFile" accept=".ttf,.otf,.woff" style="display:none">'
++ '</div>'
++ '<div class="grid2" style="padding:0 14px">'
++ '<div class="fld" style="padding-left:0"><label>Размер, мм</label>'
++ '<input type="number" step="1" min="2" max="500" class="inp mono" id="textSize" value="' + textState.fontSize + '"></div>'
++ '<div class="fld" style="padding-right:0"><label>Межбуквенный, мм</label>'
++ '<input type="number" step="0.5" min="-5" max="50" class="inp mono" id="textSpacing" value="' + textState.letterSpacing + '"></div>'
++ '</div>'
++ '<div class="btnrow"><button class="btn orange" id="textPlaceBtn">'
++ icon('textTool', 14) + ' Кликните на холст для размещения</button></div>'
++ '<div class="hint">Введите текст, выберите шрифт и размер, затем кликните на холсте — текст будет конвертирован в замкнутые векторные контуры, пригодные для резки. Каждая буква/символ становится отдельным контуром.</div>'
++ '</div>';
+}
+
+function bindTextCard(){
+var contentEl = $('#textContent');
+if(contentEl){
+contentEl.oninput = function(){ textState.content = this.value; };
+}
+var sizeEl = $('#textSize');
+if(sizeEl){
+sizeEl.onchange = function(){
+var v = parseFloat(this.value);
+if(v > 0) textState.fontSize = v;
+else this.value = textState.fontSize;
+};
+}
+var spacingEl = $('#textSpacing');
+if(spacingEl){
+spacingEl.onchange = function(){
+var v = parseFloat(this.value);
+textState.letterSpacing = isNaN(v) ? 0 : v;
+};
+}
+/* Выпадающий список предустановленных шрифтов */
+var fontSel = $('#textFontSelect');
+if(fontSel){
+fontSel.onchange = function(){
+var name = this.value;
+var found = null;
+for(var i=0;i<PRESET_FONTS.length;i++){
+if(PRESET_FONTS[i].name===name){ found=PRESET_FONTS[i]; break; }
+}
+if(found) loadFontByName(found.name, found.url);
+};
+}
+/* Кнопка загрузки произвольного файла шрифта */
+var fontFileBtn = $('#textFontFileBtn');
+var fontFile = $('#textFontFile');
+if(fontFileBtn && fontFile){
+fontFileBtn.onclick = function(){ fontFile.click(); };
+fontFile.onchange = function(){
+if(this.files && this.files[0]) loadFontFromFile(this.files[0]);
+this.value = '';
+};
+}
+}
+
 function nextColor(){return PALETTE[colorIdx++%PALETTE.length];}
 function addObject(points,closed,name,color){
 var o={id:uid(),name:name||('Контур '+(objects.length+1)),closed:closed,visible:true,cut:true,color:color||nextColor(),points:points};
@@ -8114,7 +8387,7 @@ var sel=selected();
    в самом верху панели «Объект» во всех ветках — это гарантирует,
    что при активации инструмента карточка не «прыгает» по вкладке
    и не исчезает при смене выделения. */
-var topCards = polyCardHTML() + eraserCardHTML() + dimensionCardHTML() + rulerCardHTML();
+var topCards = polyCardHTML() + eraserCardHTML() + dimensionCardHTML() + rulerCardHTML() + textCardHTML();
 
 if(!sel.length){
 box.innerHTML=topCards+
@@ -8127,6 +8400,7 @@ box.innerHTML=topCards+
 '<button class="btn tint" id="qRect">'+icon('rect',14)+' Прямоуг.</button>'+
 '<button class="btn tint" id="qCircle">'+icon('ellipse',14)+' Круг</button>'+
 '<button class="btn tint" id="qPoly">'+icon('polygonTool',14)+' Многоуг.</button>'+
+'<button class="btn tint" id="qText">'+icon('textTool',14)+' Текст</button>'+
 '</div>'+
 '<div class="btnrow" style="padding-top:0;padding-bottom:14px">'+
 '<button class="btn" id="qSample">'+icon('flame',14)+' Пример</button>'+
@@ -8136,6 +8410,7 @@ box.innerHTML=topCards+
 $('#qRect').onclick=function(){pushHistory();var b=visibleWorld();var o=addObject(rectPts(Math.round(b.x0+40),Math.round(b.y0+40),120,80),true,'Прямоугольник');selection=[o.id];afterChange();};
 $('#qCircle').onclick=function(){pushHistory();var b=visibleWorld();var o=addObject(circlePtsFactory(Math.round(b.x0+80),Math.round(b.y0+80),40),true,'Круг');selection=[o.id];afterChange();};
 $('#qPoly').onclick=function(){setTool('poly');};
+$('#qText').onclick=function(){setTool('text');};
 $('#qSample').onclick=makeSample;
 $('#qImport').onclick=function(){$('#fileImport').click();};
 $('#qHelp').onclick=showHelp;
@@ -8475,7 +8750,7 @@ if(tool==='array'){
 }
 bindEraserCardUI();
 }
-function renderProps(){ renderPropsInner(); bindPolyCard(); bindEraserCardUI(); bindDimensionCardUI(); bindRulerCardUI(); }
+function renderProps(){ renderPropsInner(); bindPolyCard(); bindEraserCardUI(); bindDimensionCardUI(); bindRulerCardUI(); bindTextCard(); }
 function transformObjectScale(o,b,sx,sy){
 if(o.type==='group'){ groupChildren(o).forEach(function(c){transformObjectScale(c,b,sx,sy);}); return; }
 if(!o.points) return;
@@ -8517,7 +8792,8 @@ ellipse:'Тяните по диагонали габарита · Shift — кр
 poly:'Многоугольник вписан в окружность · Тяните от центра: радиус и ориентация за курсором · Shift — поворот шагом 15° · Клик — многоугольник заданного радиуса · Число углов — в панели справа',
 hand:'Перетаскивание — панорама · Колесо — масштаб · Пробел — временная рука',
 revdir:'Стрелки показывают направление обхода · 2×клик по контуру — развернуть',
-offset:'Клик по фигуре — выделить · Shift+клик — добавить/убрать · Параметры — в панели справа · 2×клик по контуру — применить отступ'
+offset:'Клик по фигуре — выделить · Параметры — в панели справа · 2×клик по контуру — применить отступ',
+text:'Введите текст в панели справа · Выберите шрифт и размер · Кликните на холсте — текст конвертируется в векторные контуры для резки'
 };
 var _lastHintText = '';
 var _hintAnim = null;
@@ -9797,6 +10073,10 @@ if(tool === 'select'){
 }
 
 var wSnap=snapAll(w,null);
+if(tool==='text'){
+placeTextAt(w);
+return;
+}
 if(tool==='dimension'){
   /* Радиус / диаметр: 1 клик по окружности */
   if(dimensionState.type === 'radius' || dimensionState.type === 'diameter'){
@@ -11021,7 +11301,7 @@ function buildRightPanel(){
 var m={rpAlignLeft:'alignLeft',rpAlignRight:'alignRight',rpAlignTop:'alignTop',rpAlignBottom:'alignBottom',
 rpAlignCenterH:'alignCenterH',rpAlignCenterV:'alignCenterV',rpDistH:'distributeH',rpDistV:'distributeV',
 rpUnion:'merge',rpDiff:'subtract',rpIntersect:'intersect',
-rpNest:'nesting',btnGroup:'layers',btnUngroup:'layers',
+rpText:'textTool',rpNest:'nesting',btnGroup:'layers',btnUngroup:'layers',
 rpFront:'bringF',rpBack:'sendB',rpReverse:'reverse',rpMirror:'mirrorAxis',rpLinearize:'linearize',
 btnShowToolpath:'play',btnShowNumbers:'numbers',btnShowDims:'dimension'};
 for(var id in m){ var el=$('#'+id); if(el) el.innerHTML=icon(m[id],19); }
@@ -11036,6 +11316,7 @@ $('#rpDistV').onclick=function(){alignObjects('distributeV');};
 $('#rpUnion').onclick=function(){booleanSelected('union');};
 $('#rpDiff').onclick=function(){booleanSelected('diff');};
 $('#rpIntersect').onclick=function(){booleanSelected('intersect');};
+$('#rpText').onclick=function(){setTool('text');};
 $('#rpNest').onclick=toggleNestPanel;
 $('#btnGroup').onclick=groupSelected;
 $('#btnUngroup').onclick=ungroupSelected;
@@ -11083,6 +11364,7 @@ if(t!=='ruler'){ rulerReset(); ruler.hover=null; _lastRulerCardSig=''; }
 if(t!=='poly'&&polyDraft){ polyDraft=null; }
 if(t!=='arc'&&arcDraft){ arcDraft=null; }
 if(t!=='knife'&&knife.a){ knifeReset(); selection=[]; }
+if(t==='text'&&!textState.fontLoaded) loadDefaultFont();
 if(t!=='dimension'){ dimDraft=null; dimHoverCircle=null; }
 tool=t; nodeSel.clear();
 wrap.dataset.tool=t;
@@ -12331,6 +12613,7 @@ case '=':case '+':zoomCenter(1.25);break;
 case '-':zoomCenter(1/1.25);break;
 case '0':fitView();break;
 case 'g':switchTab('cam');break;
+case 't': if(e.shiftKey){ e.preventDefault(); setTool('text'); } break;
 }
 });
 document.addEventListener('keyup',function(e){
@@ -13337,6 +13620,7 @@ window.addEventListener('beforeunload', function(){
 });
 }
 bindGcodeOutUI();
+loadDefaultFont();
 init();
 })();
 </script>
