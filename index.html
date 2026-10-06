@@ -1385,12 +1385,23 @@ button.chip:hover{background:var(--fill)}
   </div>
 
     <!-- Предпросмотр -->
-  <div class="fld">
-    <label>Пример имени</label>
-    <div class="gc-name-preview">
-      <span class="gc-name-preview-name" id="gcPreviewName">—</span>
-    </div>
-  </div>
+<div class="fld">
+<label>Пример имени</label>
+<div class="gc-name-preview">
+<span class="gc-name-preview-name" id="gcPreviewName">—</span>
+</div>
+</div>
+
+<!-- Расширение файла -->
+<div class="fld">
+<label>Расширение файла</label>
+<div class="calc-seg" id="gcExtSeg">
+<button data-v="nc" class="on">.NC</button>
+<button data-v="tap">.TAP</button>
+<button data-v="cnc">.CNC</button>
+<button data-v="txt">.TXT</button>
+</div>
+</div>
 
   <!-- Проект / материал -->
   <div class="grid2" style="padding:0 14px">
@@ -2155,15 +2166,16 @@ prefix:'', suffix:''
 };
 /* ═══ Правила именования выходных G-code файлов ═══ */
 var gcodeOut = {
-    template:  '{project}_{date}_{time}_{seq}',
-    project:   'Задание',
-    material:  'ПС',
-    thickness: '',      /* '' = не подставлять */
-    user:      '',
-    dir:       '',      /* путь в виде текста (для подсказки) */
-    dirHandle: null,    /* File System Access API handle, не сериализуется */
-    seqEnabled: true,
-    sanitize:   true
+template:  '{project}_{date}_{time}_{seq}',
+ext:       'nc',    /* расширение: 'nc' | 'tap' | 'cnc' | 'txt' */
+project:   'Задание',
+material:  'ПС',
+thickness: '',      /* '' = не подставлять */
+user:      '',
+dir:       '',      /* путь в виде текста (для подсказки) */
+dirHandle: null,    /* File System Access API handle, не сериализуется */
+seqEnabled: true,
+sanitize:   true
 };
 
 /* Список плейсхолдеров для таблицы. */
@@ -11462,7 +11474,8 @@ function gcBuildName(extra){
          .replace(/[_\-.]+$/,'');
     if(!s) s='hotwire_'+map.date+'_'+map.time+'_'+seq;
     var base = gcodeOut.sanitize ? gcSanitize(s) : s;
-    return base + '.nc';
+var ext = gcodeOut.ext || 'nc';
+return base + '.' + ext;
 }
 
 /* Предпросмотр для UI — без инкремента счётчика. */
@@ -11517,17 +11530,18 @@ function downloadGcode(){
 }
 
 function gcRefreshPreview(){
-    var el = $('#gcPreviewName');
-    if(!el) return;
-    var name = gcPreviewName();
-    /* Подсветим расширение .nc */
-    var base = name.replace(/\.nc$/,'');
-    el.innerHTML = '';
-    el.appendChild(document.createTextNode(base));
-    var extSpan = document.createElement('span');
-    extSpan.className = 'gc-name-preview-ext';
-    extSpan.textContent = '.nc';
-    el.appendChild(extSpan);
+var el = $('#gcPreviewName');
+if(!el) return;
+var name = gcPreviewName();
+var ext = gcodeOut.ext || 'nc';
+var re = new RegExp('\\.' + ext + '$', 'i');
+var base = name.replace(re, '');
+el.innerHTML = '';
+el.appendChild(document.createTextNode(base));
+var extSpan = document.createElement('span');
+extSpan.className = 'gc-name-preview-ext';
+extSpan.textContent = '.' + ext;
+el.appendChild(extSpan);
 }
 function buildSide(){
 $('#mainSeg').addEventListener('click',function(e){
@@ -11874,15 +11888,22 @@ function bindGcodeOutUI(){
 
     /* --- синхронизация полей и предпросмотра --- */
     function syncAll(){
-        tpl.value     = gcodeOut.template;
-        project.value = gcodeOut.project;
-        mat.value     = gcodeOut.material;
-        thick.value   = (gcodeOut.thickness==='' ? '' : gcodeOut.thickness);
-        user.value    = gcodeOut.user || '';
-        seq.checked   = !!gcodeOut.seqEnabled;
-        if(dirInp) dirInp.value = gcodeOut.dir || '';
-        gcRefreshPreview();
-    }
+tpl.value     = gcodeOut.template;
+project.value = gcodeOut.project;
+mat.value     = gcodeOut.material;
+thick.value   = (gcodeOut.thickness==='' ? '' : gcodeOut.thickness);
+user.value    = gcodeOut.user || '';
+seq.checked   = !!gcodeOut.seqEnabled;
+if(dirInp) dirInp.value = gcodeOut.dir || '';
+/* Синхронизация переключателя расширения */
+var extSeg = $('#gcExtSeg');
+if(extSeg){
+extSeg.querySelectorAll('button[data-v]').forEach(function(b){
+b.classList.toggle('on', b.dataset.v === (gcodeOut.ext || 'nc'));
+});
+}
+gcRefreshPreview();
+}
 
     tpl.addEventListener('input', function(){
         gcodeOut.template = this.value || '{date}_{time}_{seq}';
@@ -11928,8 +11949,28 @@ function bindGcodeOutUI(){
     };
 
     /* Публикуем для init(): синхронизация после загрузки проекта. */
-    window.__syncGcodeOutUI = syncAll;
-    syncAll();
+  /* --- переключатель расширения --- */
+var extSeg = $('#gcExtSeg');
+if(extSeg){
+/* Синхронизировать активную кнопку с состоянием */
+extSeg.querySelectorAll('button[data-v]').forEach(function(b){
+b.classList.toggle('on', b.dataset.v === (gcodeOut.ext || 'nc'));
+});
+extSeg.addEventListener('click', function(e){
+var b = e.target.closest('button[data-v]');
+if(!b) return;
+gcodeOut.ext = b.dataset.v;
+extSeg.querySelectorAll('button[data-v]').forEach(function(x){
+x.classList.toggle('on', x.dataset.v === gcodeOut.ext);
+});
+gcRefreshPreview();
+scheduleSave();
+});
+}
+
+/* Публикуем для init(): синхронизация после загрузки проекта. */
+window.__syncGcodeOutUI = syncAll;
+syncAll();
 }
 /* ═══ UI: чип OSNAP ═══ */
 function updateOsnapChip(){
