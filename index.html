@@ -5394,9 +5394,13 @@ for(var q2=before;q2<bd.paths.length;q2++) bd.paths[q2].color=aci;
 }
 var k=0, inEntities=false, poly=null;
 while(k<pairs.length){
+if(pairs[k][0]===2){
+var secName=pairs[k][1].toUpperCase();
+inEntities=(secName==='ENTITIES');
+k++; continue;
+}
 if(pairs[k][0]===0){
 var v=pairs[k][1].toUpperCase();
-if(v==='ENTITIES'){inEntities=true;k++;continue;}
 if(v==='ENDSEC'){inEntities=false;k++;continue;}
 if(inEntities){
 if(poly&&v==='VERTEX'){
