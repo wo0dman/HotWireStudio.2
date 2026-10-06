@@ -187,9 +187,16 @@ button svg{pointer-events:none;flex:none}
   background:#FFFFFF;
   color:#1C1C1E;
 }
-.card.card-hero select.inp option{
-  background:#1C1C1E;
-  color:#fff;
+/* Единый вид опций во всех селектах, чтобы не появлялись «полоски»
+   от браузерного рендера тёмных опций на светлом фоне. */
+select.inp option{
+  background:#FFFFFF;
+  color:#1C1C1E;
+}
+select.inp option:checked,
+select.inp option:hover{
+  background:#E8F0FF;
+  color:#1C1C1E;
 }
 .card.card-hero .btn{
   background:rgba(255,255,255,.20);
@@ -2119,25 +2126,53 @@ fontSize: 20,
 letterSpacing: 0,
 font: null,
 fontName: 'Roboto',
-fontLoaded: false
+fontLoaded: false,
+source: 'preset'    /* 'preset' | 'system' | 'file' */
 };
+/* Кэш системных шрифтов (массив FontData от queryLocalFonts()).
+   null = ещё не загружали, [] = загружали, но пусто. */
+var systemFontsCache = null;
 /* Предустановленные шрифты (загружаются из CDN при выборе) */
+/* ═══ Встроенные шрифты ═══
+   Источник — CDN jsdelivr, npm-пакеты @fontsource.
+   Формат WOFF (не WOFF2 — WOFF2 требует brotli-декодер, которого
+   у opentype.js по умолчанию нет).
+
+   Подвыборки Google Fonts разделены на latin / latin-ext / cyrillic /
+   cyrillic-ext. Файл "cyrillic" содержит ТОЛЬКО кириллические глифы и
+   базовые знаки; файл "latin" — только латиницу. Поскольку это
+   приложение русское, большинству пользователей нужна кириллица —
+   поэтому у шрифтов, где она есть, стоит подвыборка cyrillic.
+   Для смешанного текста (кириллица + латиница) используйте режим
+   «Системные» (queryLocalFonts) или загрузите полный TTF-файл. */
 var PRESET_FONTS = [
-{name:'Roboto',        url:'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.ttf'},
-{name:'PT Sans',       url:'https://fonts.gstatic.com/s/ptsans/v17/jizaRExUiTo99u79D0KExQ.ttf'},
-{name:'PT Serif',      url:'https://fonts.gstatic.com/s/ptserif/v18/EJRVQgYoZZY2vCFuvAFWzro.ttf'},
-{name:'Open Sans',     url:'https://fonts.gstatic.com/s/opensans/v34/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVI.ttf'},
-{name:'Montserrat',    url:'https://fonts.gstatic.com/s/montserrat/v25/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aXo.ttf'},
-{name:'Oswald',        url:'https://fonts.gstatic.com/s/oswald/v49/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvgUFoZA.ttf'},
-{name:'Ubuntu',        url:'https://fonts.gstatic.com/s/ubuntu/v20/4iCs6KVjbNBYlgoKfw72.ttf'},
-{name:'Play',          url:'https://fonts.gstatic.com/s/play/v19/6aez4K2oVqwIjtI8Hp8Txw.ttf'},
-{name:'Russo One',     url:'https://fonts.gstatic.com/s/russoone/v14/Z9XUDmZRWg6M1LvRYsH-yMOInrib9Q.ttf'},
-{name:'Lobster',       url:'https://fonts.gstatic.com/s/lobster/v28/neILzCirqoswsqX9_oWsMqEzSJQ.ttf'},
-{name:'Caveat',        url:'https://fonts.gstatic.com/s/caveat/v18/WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9SIKjYBxPw.ttf'},
-{name:'Pacifico',      url:'https://fonts.gstatic.com/s/pacifico/v22/FwZY7-Qmy14u9lezJ-6H6MmBp0u-.ttf'},
-{name:'Press Start 2P',url:'https://fonts.gstatic.com/s/pressstart2p/v15/e3t4euO8T-267oIAQAu6jDQyK3nVivNm4I81.mp.ttf'},
-{name:'Courier New',   url:'https://fonts.gstatic.com/s/courierprime/v7/u-4k0q2lgwslOqpF_6gQ8kELY7pMT-Dfqw.ttf'},
-{name:'Georgia',       url:'https://fonts.gstatic.com/s/georgia/v1/rP2bp2a0C0CjOqXO2Hc6N1I.ttf'}
+  /* ─── С кириллицей (основной набор) ─── */
+  {name:'PT Sans',       url:'https://cdn.jsdelivr.net/npm/@fontsource/pt-sans/files/pt-sans-cyrillic-400-normal.woff'},
+  {name:'PT Serif',      url:'https://cdn.jsdelivr.net/npm/@fontsource/pt-serif/files/pt-serif-cyrillic-400-normal.woff'},
+  {name:'Ubuntu',        url:'https://cdn.jsdelivr.net/npm/@fontsource/ubuntu/files/ubuntu-cyrillic-400-normal.woff'},
+  {name:'Russo One',     url:'https://cdn.jsdelivr.net/npm/@fontsource/russo-one/files/russo-one-cyrillic-400-normal.woff'},
+  {name:'Roboto',        url:'https://cdn.jsdelivr.net/npm/@fontsource/roboto/files/roboto-cyrillic-400-normal.woff'},
+  {name:'Open Sans',     url:'https://cdn.jsdelivr.net/npm/@fontsource/open-sans/files/open-sans-cyrillic-400-normal.woff'},
+  {name:'Montserrat',    url:'https://cdn.jsdelivr.net/npm/@fontsource/montserrat/files/montserrat-cyrillic-400-normal.woff'},
+  {name:'Oswald',        url:'https://cdn.jsdelivr.net/npm/@fontsource/oswald/files/oswald-cyrillic-400-normal.woff'},
+  {name:'Raleway',       url:'https://cdn.jsdelivr.net/npm/@fontsource/raleway/files/raleway-cyrillic-400-normal.woff'},
+  {name:'Rubik',         url:'https://cdn.jsdelivr.net/npm/@fontsource/rubik/files/rubik-cyrillic-400-normal.woff'},
+  {name:'Comfortaa',     url:'https://cdn.jsdelivr.net/npm/@fontsource/comfortaa/files/comfortaa-cyrillic-400-normal.woff'},
+  {name:'Marck Script',  url:'https://cdn.jsdelivr.net/npm/@fontsource/marck-script/files/marck-script-cyrillic-400-normal.woff'},
+  {name:'Lobster',       url:'https://cdn.jsdelivr.net/npm/@fontsource/lobster/files/lobster-cyrillic-400-normal.woff'},
+  {name:'Pacifico',      url:'https://cdn.jsdelivr.net/npm/@fontsource/pacifico/files/pacifico-cyrillic-400-normal.woff'},
+  {name:'Caveat',        url:'https://cdn.jsdelivr.net/npm/@fontsource/caveat/files/caveat-cyrillic-400-normal.woff'},
+  {name:'Philosopher',   url:'https://cdn.jsdelivr.net/npm/@fontsource/philosopher/files/philosopher-cyrillic-400-normal.woff'},
+
+  /* ─── Только латиница (для англ. букв, цифр и знаков) ─── */
+  {name:'Press Start 2P',   url:'https://cdn.jsdelivr.net/npm/@fontsource/press-start-2p/files/press-start-2p-latin-400-normal.woff'},
+  {name:'Courier Prime',    url:'https://cdn.jsdelivr.net/npm/@fontsource/courier-prime/files/courier-prime-latin-400-normal.woff'},
+  {name:'Bebas Neue',       url:'https://cdn.jsdelivr.net/npm/@fontsource/bebas-neue/files/bebas-neue-latin-400-normal.woff'},
+  {name:'Dancing Script',   url:'https://cdn.jsdelivr.net/npm/@fontsource/dancing-script/files/dancing-script-latin-400-normal.woff'},
+  {name:'Amatic SC',        url:'https://cdn.jsdelivr.net/npm/@fontsource/amatic-sc/files/amatic-sc-latin-400-normal.woff'},
+  {name:'Indie Flower',     url:'https://cdn.jsdelivr.net/npm/@fontsource/indie-flower/files/indie-flower-latin-400-normal.woff'},
+  {name:'Shadows Into Light', url:'https://cdn.jsdelivr.net/npm/@fontsource/shadows-into-light/files/shadows-into-light-latin-400-normal.woff'},
+  {name:'Play',             url:'https://cdn.jsdelivr.net/npm/@fontsource/play/files/play-latin-400-normal.woff'}
 ];
 var fontCache = {};   /* кэш загруженных шрифтов: name → opentype.Font */
 var polyDraft=null;
@@ -4504,9 +4539,9 @@ return;
 try{
 opentype.load(url, function(err, font){
 if(err){
-console.warn('Не удалось загрузить шрифт «'+name+'»:', err);
-toast('⚠ Шрифт «'+name+'» не загрузился', 'close');
-return;
+  console.warn('Не удалось загрузить шрифт «'+name+'»:', err);
+  toast('⚠ «'+name+'» не загрузился — попробуйте другой или режим «Системные»', 'close');
+  return;
 }
 fontCache[name] = font;
 textState.font = font;
@@ -4539,7 +4574,85 @@ toast('⚠ Не удалось прочитать шрифт: ' + (err.message |
 };
 reader.readAsArrayBuffer(file);
 }
+/* ═══ Системные шрифты через Local Font Access API ═══
+   Поддерживается в Chrome / Edge 103+. В Firefox / Safari
+   window.queryLocalFonts === undefined — соответствующий режим
+   покажет предупреждение. */
+function systemFontsSupported(){
+  return typeof window.queryLocalFonts === 'function';
+}
 
+/* Возвращает Promise<FontData[]>. Кэширует результат,
+   если не передан forceRefresh = true. */
+function querySystemFonts(forceRefresh){
+  return new Promise(function(resolve){
+    if(!systemFontsSupported()){ resolve([]); return; }
+    if(systemFontsCache && !forceRefresh){ resolve(systemFontsCache); return; }
+    window.queryLocalFonts().then(function(fonts){
+      /* Дедупликация по postscriptName — иначе получим десятки копий
+         (Regular, Bold, Italic и т.п. одного шрифта). */
+      var seen = {}, uniq = [];
+      for(var i = 0; i < fonts.length; i++){
+        var f = fonts[i];
+        var key = f.postscriptName || f.fullName || f.family;
+        if(!key || seen[key]) continue;
+        seen[key] = 1;
+        uniq.push(f);
+      }
+      /* Сортировка: по семейству, потом по начертанию. */
+      uniq.sort(function(a, b){
+        var fa = (a.family || '').toLowerCase();
+        var fb = (b.family || '').toLowerCase();
+        if(fa !== fb) return fa < fb ? -1 : 1;
+        return (a.style || '').localeCompare(b.style || '');
+      });
+      systemFontsCache = uniq;
+      resolve(uniq);
+    }).catch(function(err){
+      console.warn('queryLocalFonts error:', err);
+      systemFontsCache = [];
+      resolve([]);
+    });
+  });
+}
+
+/* Загружает конкретный FontData в textState.font.
+   Блоб системного шрифта конвертируется в ArrayBuffer и парсится opentype. */
+function loadSystemFont(fontData){
+  return fontData.blob().then(function(blob){
+    return blob.arrayBuffer();
+  }).then(function(buffer){
+    var font = opentype.parse(buffer);
+    textState.font = font;
+    textState.fontLoaded = true;
+    textState.fontName = (fontData.fullName || fontData.family || 'Системный')
+                       + (fontData.style ? ' · ' + fontData.style : '');
+    var lbl = $('#textFontLabel');
+    if(lbl) lbl.textContent = textState.fontName;
+    toast('Шрифт: ' + textState.fontName, 'check');
+  }).catch(function(err){
+    console.error(err);
+    toast('Не удалось загрузить шрифт: ' + (err.message || 'ошибка'), 'close');
+  });
+}
+
+/* Заполняет <select id="textSysFontSelect"> опциями. */
+function fillSystemFontsSelect(fonts){
+  var sel = $('#textSysFontSelect');
+  if(!sel) return;
+  if(!fonts.length){
+    sel.innerHTML = '<option value="">— шрифты недоступны —</option>';
+    return;
+  }
+  var html = '<option value="">— выберите шрифт (' + fonts.length + ') —</option>';
+  for(var i = 0; i < fonts.length; i++){
+    var f = fonts[i];
+    var label = (f.fullName || f.family || 'шрифт')
+              + (f.style ? ' · ' + f.style : '');
+    html += '<option value="' + i + '">' + esc(label) + '</option>';
+  }
+  sel.innerHTML = html;
+}
 function textToContours(text, x, y, fontSize, spacing, font){
 if(!font || !text || !text.trim()) return [];
 var contours = [];
@@ -4564,11 +4677,11 @@ switch(c.type){
 case 'M':
 if(currentPts.length >= 3) flushContour();
 currentPts = [];
-curX = c.x; curY = -c.y;
+curX = c.x; curY = c.y;
 currentPts.push(mkPoint(curX, curY));
 break;
 case 'L':
-var lx = c.x, ly = -c.y;
+var lx = c.x, ly = c.y;
 if(currentPts.length > 0){
 var prev = currentPts[currentPts.length - 1];
 prev.ox = lx; prev.oy = ly;
@@ -4579,9 +4692,9 @@ lp.ix = curX; lp.iy = curY;
 currentPts.push(lp);
 break;
 case 'C':
-var c1x = c.x1, c1y = -c.y1;
-var c2x = c.x2, c2y = -c.y2;
-var cx3 = c.x, cy3 = -c.y;
+var c1x = c.x1, c1y = c.y1;
+var c2x = c.x2, c2y = c.y2;
+var cx3 = c.x, cy3 = c.y;
 if(currentPts.length > 0){
 var prevC = currentPts[currentPts.length - 1];
 prevC.ox = c1x; prevC.oy = c1y;
@@ -4592,8 +4705,8 @@ cp.ix = c2x; cp.iy = c2y;
 currentPts.push(cp);
 break;
 case 'Q':
-var qx1 = c.x1, qy1 = -c.y1;
-var qx2 = c.x, qy2 = -c.y;
+var qx1 = c.x1, qy1 = c.y1;
+var qx2 = c.x, qy2 = c.y;
 if(currentPts.length > 0){
 var prevQ = currentPts[currentPts.length - 1];
 var pqx = prevQ.x, pqy = prevQ.y;
@@ -4658,78 +4771,212 @@ setTool('select');
 }
 
 function textCardHTML(){
-if(tool !== 'text') return '';
-return '<div class="card card-hero" id="textCard">'
-+ '<div class="card-h"><span>Текст в кривые</span><span class="note">векторные контуры</span></div>'
-+ '<div class="fld"><label>Текст</label>'
-+ '<textarea class="inp mono" id="textContent" rows="2" spellcheck="false" placeholder="Введите текст…">'
-+ esc(textState.content) + '</textarea></div>'
-+ '<div class="fld"><label>Шрифт</label>'
-+ '<select class="inp" id="textFontSelect">'
-+ PRESET_FONTS.map(function(f){
- return '<option value="'+f.name+'"'+(f.name===textState.fontName?' selected':'')+'>'+f.name+'</option>';
- }).join('')
-+ '</select>'
-+ '<div style="margin-top:6px;display:flex;gap:6px;align-items:center">'
-+ '<div style="flex:1;font-size:11px;color:var(--label2)" id="textFontLabel">'+esc(textState.fontName)+'</div>'
-+ '<button class="btn tint" id="textFontFileBtn" style="flex:none;padding:0 10px;font-size:11px;height:28px">Файл…</button>'
-+ '</div>'
-+ '<input type="file" id="textFontFile" accept=".ttf,.otf,.woff" style="display:none">'
-+ '</div>'
-+ '<div class="grid2" style="padding:0 14px">'
-+ '<div class="fld" style="padding-left:0"><label>Размер, мм</label>'
-+ '<input type="number" step="1" min="2" max="500" class="inp mono" id="textSize" value="' + textState.fontSize + '"></div>'
-+ '<div class="fld" style="padding-right:0"><label>Межбуквенный, мм</label>'
-+ '<input type="number" step="0.5" min="-5" max="50" class="inp mono" id="textSpacing" value="' + textState.letterSpacing + '"></div>'
-+ '</div>'
-+ '<div class="btnrow"><button class="btn orange" id="textPlaceBtn">'
-+ icon('textTool', 14) + ' Кликните на холст для размещения</button></div>'
-+ '<div class="hint">Введите текст, выберите шрифт и размер, затем кликните на холсте — текст будет конвертирован в замкнутые векторные контуры, пригодные для резки. Каждая буква/символ становится отдельным контуром.</div>'
-+ '</div>';
+  if(tool !== 'text') return '';
+  var src = textState.source || 'preset';
+  var isPreset = src === 'preset';
+  var isSystem = src === 'system';
+  var isFile   = src === 'file';
+  var sysOk    = systemFontsSupported();
+
+  var html = '<div class="card card-hero" id="textCard">'
+    + '<div class="card-h"><span>Текст в кривые</span><span class="note">векторные контуры</span></div>';
+
+  /* Текст */
+  html += '<div class="fld"><label>Текст</label>'
+    + '<textarea class="inp mono" id="textContent" rows="2" spellcheck="false" placeholder="Введите текст…">'
+    + esc(textState.content) + '</textarea></div>';
+
+  /* Переключатель источника */
+  html += '<div class="fld"><label>Источник шрифта</label>'
+    + '<div class="calc-seg" id="textFontSrcSeg">'
+    +   '<button type="button" data-v="preset"' + (isPreset ? ' class="on"' : '') + '>Встроенные</button>'
+    +   '<button type="button" data-v="system"' + (isSystem ? ' class="on"' : '') + '>Системные</button>'
+    +   '<button type="button" data-v="file"'   + (isFile   ? ' class="on"' : '') + '>Из файла</button>'
+    + '</div></div>';
+
+  /* --- Панель «Встроенные» --- */
+  if(isPreset){
+    html += '<div class="fld"><label>Шрифт</label>'
+      + '<select class="inp" id="textFontSelect">'
+      +   PRESET_FONTS.map(function(f){
+            return '<option value="'+esc(f.name)+'"'+(f.name===textState.fontName?' selected':'')+'>'
+                 + esc(f.name) + '</option>';
+          }).join('')
+      + '</select>'
+      + '<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.85)" id="textFontLabel">'
+      +   esc(textState.fontName) + '</div>'
+      + '</div>';
+  }
+
+  /* --- Панель «Системные» --- */
+  if(isSystem){
+    html += '<div class="fld"><label>Системный шрифт</label>';
+    if(sysOk){
+      html += '<div style="display:flex;gap:6px;align-items:stretch">'
+        +   '<select class="inp" id="textSysFontSelect" style="flex:1;min-width:0">'
+        +     '<option value="">— нажмите «Загрузить» —</option>'
+        +   '</select>'
+        +   '<button type="button" class="btn" id="textSysLoadBtn"'
+        +     ' style="flex:none;width:34px;padding:0;background:#fff;color:#007AFF;font-weight:700"'
+        +     ' title="Загрузить список системных шрифтов">↻</button>'
+        + '</div>'
+        + '<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.85)" id="textFontLabel">'
+        +   esc(textState.fontName || '— не выбран —') + '</div>'
+        + '<div class="gc-folder-hint" style="color:rgba(255,255,255,.72);padding-top:6px">'
+        +   'При первом нажатии «↻» браузер запросит разрешение на чтение локальных шрифтов. '
+        +   'Работает в Chrome / Edge 103+.'
+        + '</div>';
+    } else {
+      html += '<div class="gc-folder-hint" style="color:rgba(255,255,255,.85);padding-top:2px">'
+        +   '⚠ Браузер не поддерживает <b>queryLocalFonts</b>. '
+        +   'Используйте Chrome / Edge 103+ либо загрузите файл шрифта вручную.'
+        + '</div>';
+    }
+    html += '</div>';
+  }
+
+  /* --- Панель «Из файла» --- */
+  if(isFile){
+    html += '<div class="fld"><label>Файл шрифта (.ttf / .otf / .woff)</label>'
+      + '<button type="button" class="btn" id="textFontFileBtn"'
+      +   ' style="width:100%;background:#fff;color:#007AFF;font-weight:600">Выбрать файл…</button>'
+      + '<input type="file" id="textFontFile" accept=".ttf,.otf,.woff" style="display:none">'
+      + '<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.85)" id="textFontLabel">'
+      +   esc(textState.fontName || '— не выбран —') + '</div>'
+      + '</div>';
+  }
+
+  /* Размер и межбуквенный */
+  html += '<div class="grid2" style="padding:0 14px">'
+    + '<div class="fld" style="padding-left:0"><label>Размер, мм</label>'
+    +   '<input type="number" step="1" min="2" max="500" class="inp mono" id="textSize" value="' + textState.fontSize + '"></div>'
+    + '<div class="fld" style="padding-right:0"><label>Межбуквенный, мм</label>'
+    +   '<input type="number" step="0.5" min="-5" max="50" class="inp mono" id="textSpacing" value="' + textState.letterSpacing + '"></div>'
+    + '</div>'
+    + '<div class="btnrow"><button class="btn orange" id="textPlaceBtn">'
+    +   icon('textTool', 14) + ' Кликните на холст для размещения</button></div>'
+    + '<div class="hint">Введите текст, выберите шрифт и размер, затем кликните на холсте — текст конвертируется в замкнутые векторные контуры, пригодные для резки. Каждая буква/символ становится отдельным контуром.</div>'
+    + '</div>';
+
+  return html;
 }
 
 function bindTextCard(){
-var contentEl = $('#textContent');
-if(contentEl){
-contentEl.oninput = function(){ textState.content = this.value; };
-}
-var sizeEl = $('#textSize');
-if(sizeEl){
-sizeEl.onchange = function(){
-var v = parseFloat(this.value);
-if(v > 0) textState.fontSize = v;
-else this.value = textState.fontSize;
-};
-}
-var spacingEl = $('#textSpacing');
-if(spacingEl){
-spacingEl.onchange = function(){
-var v = parseFloat(this.value);
-textState.letterSpacing = isNaN(v) ? 0 : v;
-};
-}
-/* Выпадающий список предустановленных шрифтов */
-var fontSel = $('#textFontSelect');
-if(fontSel){
-fontSel.onchange = function(){
-var name = this.value;
-var found = null;
-for(var i=0;i<PRESET_FONTS.length;i++){
-if(PRESET_FONTS[i].name===name){ found=PRESET_FONTS[i]; break; }
-}
-if(found) loadFontByName(found.name, found.url);
-};
-}
-/* Кнопка загрузки произвольного файла шрифта */
-var fontFileBtn = $('#textFontFileBtn');
-var fontFile = $('#textFontFile');
-if(fontFileBtn && fontFile){
-fontFileBtn.onclick = function(){ fontFile.click(); };
-fontFile.onchange = function(){
-if(this.files && this.files[0]) loadFontFromFile(this.files[0]);
-this.value = '';
-};
-}
+  /* ─── Текст ─── */
+  var contentEl = $('#textContent');
+  if(contentEl){
+    contentEl.oninput = function(){ textState.content = this.value; };
+  }
+
+  /* ─── Размер ─── */
+  var sizeEl = $('#textSize');
+  if(sizeEl){
+    sizeEl.onchange = function(){
+      var v = parseFloat(this.value);
+      if(v > 0) textState.fontSize = v;
+      else this.value = textState.fontSize;
+    };
+  }
+
+  /* ─── Межбуквенный интервал ─── */
+  var spacingEl = $('#textSpacing');
+  if(spacingEl){
+    spacingEl.onchange = function(){
+      var v = parseFloat(this.value);
+      textState.letterSpacing = isNaN(v) ? 0 : v;
+    };
+  }
+
+  /* ─── Переключатель источника ─── */
+  var srcSeg = $('#textFontSrcSeg');
+  if(srcSeg){
+    srcSeg.onclick = function(e){
+      var b = e.target.closest('button[data-v]');
+      if(!b) return;
+      var v = b.dataset.v;
+      if(v === textState.source) return;
+      textState.source = v;
+      /* Перерисовываем карточку под новый источник. */
+      renderProps();
+      /* Если переключились на «Системные» и шрифты ещё не подгружались —
+         автоматически запросим их (это user gesture, разрешение отработает). */
+      if(v === 'system' && systemFontsSupported()){
+        var sel = $('#textSysFontSelect');
+        if(sel && !systemFontsCache){
+          /* Асинхронно: без блокировки UI. */
+          querySystemFonts(false).then(function(fonts){
+            fillSystemFontsSelect(fonts);
+            if(!fonts.length){
+              toast('Системные шрифты недоступны или доступ запрещён','close');
+            }
+          });
+        } else if(sel && systemFontsCache){
+          fillSystemFontsSelect(systemFontsCache);
+        }
+      }
+      scheduleSave();
+    };
+  }
+
+  /* ─── Встроенные шрифты ─── */
+  var fontSel = $('#textFontSelect');
+  if(fontSel){
+    fontSel.onchange = function(){
+      var name = this.value;
+      var found = null;
+      for(var i=0; i<PRESET_FONTS.length; i++){
+        if(PRESET_FONTS[i].name === name){ found = PRESET_FONTS[i]; break; }
+      }
+      if(found) loadFontByName(found.name, found.url);
+    };
+  }
+
+  /* ─── Системные шрифты ─── */
+  var sysSel = $('#textSysFontSelect');
+  var sysLoadBtn = $('#textSysLoadBtn');
+  if(sysSel){
+    /* Если кэш уже есть — сразу наполняем. */
+    if(systemFontsCache && systemFontsCache.length){
+      fillSystemFontsSelect(systemFontsCache);
+    }
+    sysSel.onchange = function(){
+      var idx = parseInt(this.value, 10);
+      if(isNaN(idx)) return;
+      var arr = systemFontsCache || [];
+      if(arr[idx]) loadSystemFont(arr[idx]);
+    };
+  }
+  if(sysLoadBtn){
+    sysLoadBtn.onclick = function(){
+      if(!systemFontsSupported()){
+        toast('Браузер не поддерживает чтение системных шрифтов','close');
+        return;
+      }
+      sysLoadBtn.disabled = true;
+      sysLoadBtn.textContent = '…';
+      querySystemFonts(true).then(function(fonts){
+        fillSystemFontsSelect(fonts);
+        sysLoadBtn.disabled = false;
+        sysLoadBtn.textContent = '↻';
+        if(!fonts.length){
+          toast('Список системных шрифтов пуст (нет разрешения?)','close');
+        } else {
+          toast('Найдено шрифтов: ' + fonts.length, 'check');
+        }
+      });
+    };
+  }
+
+  /* ─── Загрузка из файла ─── */
+  var fontFileBtn = $('#textFontFileBtn');
+  var fontFile = $('#textFontFile');
+  if(fontFileBtn && fontFile){
+    fontFileBtn.onclick = function(){ fontFile.click(); };
+    fontFile.onchange = function(){
+      if(this.files && this.files[0]) loadFontFromFile(this.files[0]);
+      this.value = '';
+    };
+  }
 }
 
 function nextColor(){return PALETTE[colorIdx++%PALETTE.length];}
@@ -11364,7 +11611,7 @@ if(t!=='ruler'){ rulerReset(); ruler.hover=null; _lastRulerCardSig=''; }
 if(t!=='poly'&&polyDraft){ polyDraft=null; }
 if(t!=='arc'&&arcDraft){ arcDraft=null; }
 if(t!=='knife'&&knife.a){ knifeReset(); selection=[]; }
-if(t==='text'&&!textState.fontLoaded) loadDefaultFont();
+if(t==='text' && !textState.fontLoaded && textState.source !== 'system') loadDefaultFont();
 if(t!=='dimension'){ dimDraft=null; dimHoverCircle=null; }
 tool=t; nodeSel.clear();
 wrap.dataset.tool=t;
