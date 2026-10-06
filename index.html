@@ -5208,6 +5208,9 @@ out.push({pts:sp.pts,closed:sp.closed,color:color});
 return {contours:out,note:note};
 }
 function parseDXFText(text){
+if(!text || text.length<4) throw new Error('файл пуст или не читается');
+if(text.indexOf('AutoCAD Binary DXF')===0)
+throw new Error('бинарный DXF не поддерживается — пересохраните файл как ASCII DXF');
 var lines=text.split(/\r?\n/);
 var pairs=[];
 for(var i=0;i+1<lines.length;i+=2){
@@ -5215,6 +5218,7 @@ var code=parseInt(lines[i],10);
 if(isNaN(code)) continue;
 pairs.push([code,lines[i+1].trim()]);
 }
+if(!pairs.length) throw new Error('в DXF нет ни одной пары кодов — файл повреждён или не DXF');
 var units=1;
 for(var h=0;h<pairs.length-1;h++){
 if(pairs[h][0]===9&&pairs[h][1].toUpperCase()==='$INSUNITS'){
@@ -5290,8 +5294,11 @@ function readPolylineVertices(startIdx){
 }
 function bsplinePoints(ctrl,knots,deg,count){
 var n=ctrl.length;
-if(knots.length!==n+deg+1) throw new Error('knots');
+if(!isFinite(deg)||deg<1) deg=3;
+if(deg>=n) deg=n-1;
+if(knots.length!==n+deg+1) return null;
 var t0=knots[deg], t1=knots[n];
+if(!(t1>t0)) return null;
 var pts=[];
 for(var s=0;s<=count;s++){
 var t=t0+(t1-t0)*s/count;
@@ -5369,10 +5376,12 @@ var ctrl=[]; for(var c1=0;c1<xs.length;c1++) ctrl.push({x:parseFloat(xs[c1])||0,
 var knots=r[40].map(parseFloat);
 var deg=parseInt(ent[71],10); if(isNaN(deg))deg=3;
 var pts=bsplinePoints(ctrl,knots,deg,Math.max(24,ctrl.length*6));
+if(pts&&pts.length>1){
 bd.move(pts[0].x,pts[0].y);
 for(var p2=1;p2<pts.length;p2++) bd.line(pts[p2].x,pts[p2].y);
 if(closed) bd.close();
 done=true;
+}
 }catch(e){}
 }
 if(!done&&xs.length>=2){
