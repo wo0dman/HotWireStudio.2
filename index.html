@@ -986,6 +986,105 @@ button.chip:hover{background:var(--fill)}
 /* ═══ Панель типов размеров ═══ */
 .dim-seg button{padding:0 4px; height:32px; flex:1}
 .dim-seg button svg{width:18px; height:18px; display:block}
+/* Раскрывающаяся часть карточки сортировки.
+   Когда свитч выключен — карточка принимает компактный вид:
+   остаются только заголовок и сам свитч. */
+.ls-body{
+  max-height:600px;
+  overflow:hidden;
+  opacity:1;
+  transition:max-height .25s var(--ease), opacity .18s var(--ease);
+}
+#layerSortCard.compact .ls-body{
+  max-height:0;
+  opacity:0;
+}
+/* ═══ Полуавтоматическая сортировка слоёв ═══ */
+.ls-status{
+  margin:0 14px 12px;
+  background:#F6F7FA;
+  border-radius:11px;
+  padding:9px 11px;
+  font-size:11.5px;
+  line-height:1.55;
+  color:var(--label2);
+  max-height:220px;
+  overflow-y:auto;
+}
+.ls-status.on{
+  background:#FFF7E8;
+  color:var(--orangeDeep);
+}
+.ls-status b{color:var(--label);font-weight:700}
+.ls-status.on b{color:#7A3D00}
+.ls-status .ls-row{
+  display:flex;
+  gap:8px;
+  align-items:baseline;
+  padding:2px 0;
+}
+.ls-status .ls-row .num{
+  flex:none;
+  min-width:22px;
+  text-align:right;
+  font-family:var(--fm);
+  font-weight:700;
+  color:var(--orangeDeep);
+}
+.ls-status .ls-row .nm{
+  font-family:var(--ff);
+  color:var(--label);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  flex:1;
+  min-width:0;
+}
+/* Подсветка назначенных строк в списке слоёв */
+.layer.ls-marked{
+  background:linear-gradient(90deg, rgba(255,149,0,.14), rgba(255,149,0,.03));
+  box-shadow:inset 3px 0 0 0 var(--orange);
+}
+.layer.ls-marked .layer-num{
+  background:var(--orange);
+  color:#fff;
+  font-weight:700;
+}
+/* Баннер режима назначения на холсте */
+.ls-banner{
+  position:absolute;
+  top:16px;
+  left:50%;
+  transform:translateX(-50%) translateY(-8px);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 16px;
+  border-radius:12px;
+  background:linear-gradient(135deg,#FFB340,#FF7A00);
+  color:#fff;
+  font-size:12px;
+  font-weight:600;
+  box-shadow:0 6px 20px rgba(255,122,0,.35), inset 0 1px 0 rgba(255,255,255,.3);
+  white-space:nowrap;
+  max-width:calc(100% - 40px);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .18s var(--ease), transform .18s var(--ease);
+  z-index:14;
+}
+.ls-banner.show{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+.ls-banner b{
+  background:rgba(255,255,255,.25);
+  padding:1px 8px;
+  border-radius:6px;
+  font-family:var(--fm);
+  font-size:12.5px;
+}
+#canvasWrap.ls-assigning #stage{cursor:crosshair}
 </style>
 </head>
 <body>
@@ -1036,6 +1135,12 @@ button.chip:hover{background:var(--fill)}
 </g>
 <g id="labelsLayer" pointer-events="none"></g>
 </svg>
+<div id="lsBanner" class="ls-banner">
+  <span>Режим нумерации: кликните объект</span>
+  <b id="lsBannerNum">6</b>
+  <span style="opacity:.7">·</span>
+  <span style="opacity:.9;font-size:11px">Esc — отмена</span>
+</div>
 <div class="guide-badge" id="guideBadgeH" title="Горизонтальная направляющая — двойной клик">
   <svg viewBox="0 0 28 28" width="28" height="28">
     <line x1="2" y1="14" x2="8" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1270,6 +1375,31 @@ button.chip:hover{background:var(--fill)}
 </div></div>
 <div class="tabpane" id="pane-obj"><div id="propsBox"></div><div id="nestCard" class="hidden"></div></div>
 <div class="tabpane hidden" id="pane-layers">
+
+<!-- ═══ Полуавтоматическая сортировка слоёв ═══ -->
+<div class="card" id="layerSortCard">
+  <div class="card-h">
+    <span>Полуавтоматическая сортировка</span>
+  </div>
+  <label class="srow">
+    <span class="stxt">Включить режим
+      <small>Кликайте объекты на холсте в нужной последовательности</small>
+    </span>
+    <span class="sw"><input type="checkbox" id="lsEnable"><i></i></span>
+  </label>
+  <div class="ls-body">
+    <div class="fld">
+      <label>Стартовый номер слоя</label>
+      <input id="lsStart" type="number" min="1" step="1" class="inp mono" value="1">
+    </div>
+    <div class="btnrow">
+      <button class="btn tint" id="lsAssignBtn" disabled>Нумерация</button>
+      <button class="btn" id="lsFinishBtn" disabled>Применить</button>
+    </div>
+    <div class="ls-status" id="lsStatus">Выключено</div>
+  </div>
+</div>
+
 <div class="search-wrap" id="layerSearchWrap">
 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
 <input class="inp" id="layerSearch" placeholder="Поиск слоёв" spellcheck="false">
@@ -2220,6 +2350,19 @@ var showNumbers=true;
 var currentLayerNumbers={};
 var dragLayerId=null;
 var layerQuery='';
+/* ═══ Полуавтоматическая сортировка слоёв ═══
+   enabled   — свитч «Включить режим»
+   assigning — сейчас идёт приём кликов по холсту
+   startNum  — стартовый номер слоя
+   counter   — следующий номер для присвоения
+   assignments — массив назначений в порядке кликов: [{id, num, name}] */
+var layerSortState = {
+  enabled:     false,
+  assigning:   false,
+  startNum:    1,
+  counter:     1,
+  assignments: []
+};
 var clipboard=null;
 var gset={
 feed:300, rapid:2500, on:'M3 S1000', off:'M5', dwell:1.5,
@@ -6179,6 +6322,7 @@ function projCollectData(){
     iso3D:iso3D, isoThickness:isoThickness, polySet:polySet,
     workArea:workArea, nestCfg:nestSaveCfg(), offsetCfg:offsetState,
 osnapCfg:osnapSaveCfg(), guides:guides, eraserMode:eraserMode,
+layerSortCfg:{ startNum: layerSortState.startNum },
 dimensions:dimensions, showDimensions:showDimensions, dimensionState:dimensionState,
 rulerState:rulerState
   };
@@ -6210,8 +6354,12 @@ function projApplyData(data){
     var _h = parseFloat(data.workArea.h); if(_h>0) workArea.h = _h;
     workArea.dim = clamp(+data.workArea.dim||0,0,0.9);
   }
-  nestLoadCfg(data.nestCfg);
-  osnapLoadCfg(data.osnapCfg);
+ nestLoadCfg(data.nestCfg);
+osnapLoadCfg(data.osnapCfg);
+if(data.layerSortCfg && +data.layerSortCfg.startNum > 0){
+  var _lsn = parseInt(data.layerSortCfg.startNum, 10);
+  if(!isNaN(_lsn) && _lsn >= 1) layerSortState.startNum = _lsn;
+}
   if(data.offsetCfg){
     var _oc = data.offsetCfg;
     if(+_oc.dist > 0) offsetState.dist = +_oc.dist;
@@ -7212,7 +7360,25 @@ function guideHandleAtWorld(w){
 function renderOverlay(){
 var s=viewScaleEff(), px=function(v){return v/s;};
 var h='';
-
+/* ═══ Полуавтоматическая сортировка: бейджи номеров ═══ */
+if(layerSortState.assigning && layerSortState.assignments.length){
+  var sLs = viewScaleEff();
+  for(var lsq = 0; lsq < layerSortState.assignments.length; lsq++){
+    var lsa = layerSortState.assignments[lsq];
+    var lsObj = findObj(lsa.id);
+    if(!lsObj) continue;
+    var lsA = layerSortAnchor(lsObj);
+    var lsR = 11 / sLs;
+    h += '<circle cx="'+lsA.x+'" cy="'+lsA.y+'" r="'+lsR+'"'
+       + ' fill="#FF9500" stroke="#fff" stroke-width="2"'
+       + ' vector-effect="non-scaling-stroke" pointer-events="none"/>';
+    h += '<text x="'+lsA.x+'" y="'+lsA.y+'" text-anchor="middle"'
+       + ' dominant-baseline="central" font-size="'+(11/sLs)+'"'
+       + ' font-weight="700" fill="#fff"'
+       + ' font-family="JetBrains Mono,monospace"'
+       + ' pointer-events="none">'+lsa.num+'</text>';
+  }
+}
 /* ═══ Ghost во время перетаскивания направляющей ═══
    Настоящий кружок «живёт» у края холста и туда не убегает.
    Показываем его «призрак» прямо под курсором — чтобы было видно,
@@ -8288,7 +8454,13 @@ var pad=depth*15+10;
 var effVisible=isObjectVisible(o);
 var effCut=isObjectCuttable(o);
 var num=currentLayerNumbers[o.id];
-var h='<div class="layer '+(sel?'sel ':'')+(effVisible?'':'off ')+(effCut===false?'nocut':'')+'" data-id="'+o.id+'" draggable="true" style="padding-left:'+pad+'px;padding-right:8px">';
+var lsMarked = false;
+if(layerSortState.assigning && layerSortState.assignments.length){
+  for(var lsm = 0; lsm < layerSortState.assignments.length; lsm++){
+    if(layerSortState.assignments[lsm].id === o.id){ lsMarked = true; break; }
+  }
+}
+var h='<div class="layer '+(sel?'sel ':'')+(effVisible?'':'off ')+(effCut===false?'nocut ':'')+(lsMarked?'ls-marked ':'')+'" data-id="'+o.id+'" draggable="true" style="padding-left:'+pad+'px;padding-right:8px">';
 h+='<span class="layer-num">'+(num!==undefined?num:'')+'</span>';
 h+='<span class="layer-ic">'+icon(isGroup?'layers':(o.closed?'polygon':'spline'),15)+'</span>';
 h+='<span class="layer-name" data-name="'+o.id+'">'+esc(o.name)+'</span>';
@@ -8310,6 +8482,306 @@ var o=objects[i];
 if(o.type==='group'||o.group===undefined) html+=renderItem(o,0);
 }
 el.innerHTML=html||'<div class="hint">Ничего не найдено по запросу «'+esc(q)+'».</div>';
+}
+/* ═══════════════ ПОЛУАВТОМАТИЧЕСКАЯ СОРТИРОВКА СЛОЁВ ═══════════════ */
+
+/* Якорь (центр) для бейджа над объектом. Для группы — центр её габарита,
+   для одиночного — центроид полигона (labelAnchor). */
+function layerSortAnchor(o){
+  if(!o) return {x:0, y:0};
+  if(o.type === 'group'){
+    var children = groupChildren(o);
+    if(!children.length) return {x:0, y:0};
+    var bb = selBBox(children);
+    return {x: bb.x + bb.w/2, y: bb.y + bb.h/2};
+  }
+  return labelAnchor(o);
+}
+
+/* Обновляет «плашку» в верхней части холста. */
+function layerSortUpdateBanner(){
+  var b = $('#lsBanner');
+  if(!b) return;
+  if(layerSortState.assigning){
+    b.classList.add('show');
+    var n = $('#lsBannerNum');
+    if(n) n.textContent = layerSortState.counter;
+    wrap.classList.add('ls-assigning');
+  } else {
+    b.classList.remove('show');
+    wrap.classList.remove('ls-assigning');
+  }
+}
+
+/* Перерисовывает карточку сортировки и её статус. */
+function layerSortRender(){
+  var sw        = $('#lsEnable');
+  var inp       = $('#lsStart');
+  var assignBtn = $('#lsAssignBtn');
+  var finishBtn = $('#lsFinishBtn');
+  var status    = $('#lsStatus');
+  var card      = $('#layerSortCard');
+  if(!sw) return;
+
+  /* Компактный вид, когда свитч выключен. */
+  if(card) card.classList.toggle('compact', !layerSortState.enabled);
+
+  sw.checked       = !!layerSortState.enabled;
+  if(inp){
+    inp.value    = layerSortState.startNum;
+    inp.disabled = !layerSortState.enabled;
+  }
+  if(assignBtn) assignBtn.disabled = !layerSortState.enabled;
+  if(finishBtn) finishBtn.disabled = !layerSortState.enabled || !layerSortState.assigning;
+
+  if(!status) return;
+
+  if(!layerSortState.enabled){
+    status.classList.remove('on');
+    status.innerHTML = 'Выключено. Включите режим, укажите стартовый номер и нажмите «Нумерация».';
+  } else if(!layerSortState.assigning){
+    status.classList.add('on');
+    status.innerHTML = 'Готово. Нажмите <b>«Нумерация»</b>, чтобы начать приём кликов по холсту.';
+    } else if(!layerSortState.assignments.length){
+    status.classList.add('on');
+    var avail0 = layerSortState.availCount || 0;
+    status.innerHTML = 'Кликните объект — ему присвоится номер <b>'
+                     + layerSortState.counter + '</b>.<br>'
+                     + 'Доступно для нумерации: <b>' + avail0 + '</b>.<br>'
+                     + 'Esc — отмена.';
+  } else {
+    status.classList.add('on');
+    var avail1 = layerSortState.availCount || 0;
+    var html = 'Назначено <b>' + layerSortState.assignments.length
+             + '</b> из <b>' + avail1 + '</b><br>';
+    for(var i = 0; i < layerSortState.assignments.length; i++){
+      var a = layerSortState.assignments[i];
+      html += '<div class="ls-row">'
+            +   '<span class="num">' + a.num + '</span>'
+            +   '<span class="nm">'  + esc(a.name) + '</span>'
+            + '</div>';
+    }
+    html += '<div style="margin-top:6px;opacity:.75">Следующий номер: <b>'
+          + layerSortState.counter + '</b></div>';
+    status.innerHTML = html;
+  }
+}
+
+/* Применяет назначения: пересобирает objects так, чтобы кликнутые
+   объекты встали в порядке кликов начиная со стартового номера.
+   Объекты с текущим номером < start остаются на своих местах
+   (в исходном относительном порядке). Некликнутые с номером >= start
+   идут после кликнутых, сохраняя относительный порядок.
+   Дети групп — не участвуют в перестановке, они просто переносятся
+   в конец массива (computeLayerNumbers находит их по group-ссылке). */
+function layerSortApply(){
+  if(!layerSortState.assignments.length){
+    toast('Кликните хотя бы один объект');
+    return false;
+  }
+  var start = Math.max(1, layerSortState.startNum | 0);
+
+  /* Текущие номера слоёв. */
+  var curNums = computeLayerNumbers();
+
+  /* Top-level = группы + объекты без родителя.
+     Дети групп — отдельный список, они сохраняют свою относительную
+     позицию и не участвуют в сортировке. */
+  var topLevel = [];
+  var children = [];
+  for(var i = 0; i < objects.length; i++){
+    var o = objects[i];
+    if(o.type === 'group' || o.group === undefined) topLevel.push(o);
+    else children.push(o);
+  }
+
+  /* Ниже старта — оставляем как есть. Старт и выше — дели на две группы. */
+  var below = [];
+  var atOrAbove = [];
+  topLevel.forEach(function(o){
+    var n = curNums[o.id];
+    if(n === undefined) n = Infinity;
+    if(n < start) below.push({o:o, num:n});
+    else          atOrAbove.push({o:o, num:n});
+  });
+  below.sort(function(a,b){ return a.num - b.num; });
+  atOrAbove.sort(function(a,b){ return a.num - b.num; });
+
+  /* Множество id объектов, которые МОГУТ быть переназначены. */
+  var atOrAboveIds = {};
+  atOrAbove.forEach(function(e){ atOrAboveIds[e.o.id] = true; });
+
+  /* Кликнутые — в порядке кликов, ТОЛЬКО из atOrAbove.
+     Объекты с номером < start физически не могут попасть сюда,
+     даже если каким-то образом оказались в assignments. */
+  var clicked = [];
+  var clickedSet = {};
+  layerSortState.assignments.forEach(function(a){
+    if(!atOrAboveIds[a.id])     return;   /* не из переназначаемых — пропуск */
+    if(clickedSet[a.id])        return;   /* повторный клик — пропуск */
+    var obj = findObj(a.id);
+    if(obj){
+      clicked.push(obj);
+      clickedSet[a.id] = true;
+    }
+  });
+
+  /* Некликнутые из atOrAbove — в исходном относительном порядке. */
+  var unclicked = atOrAbove
+    .filter(function(e){ return !clickedSet[e.o.id]; })
+    .map(function(e){ return e.o; });
+
+  /* Итоговый порядок «от низкого номера к высокому»:
+       ниже старта → кликнутые → некликнутые. */
+  var lowToHigh = [];
+  below.forEach(function(e){ lowToHigh.push(e.o); });
+  clicked.forEach(function(o){ lowToHigh.push(o); });
+  unclicked.forEach(function(o){ lowToHigh.push(o); });
+
+  /* Защита от дубля: множество id всех top-level объектов. */
+  var seen = {}, dup = false;
+  for(var d = 0; d < lowToHigh.length; d++){
+    if(seen[lowToHigh[d].id]){ dup = true; break; }
+    seen[lowToHigh[d].id] = true;
+  }
+  if(dup || lowToHigh.length !== topLevel.length){
+    console.warn('layerSortApply: рассинхрон массива', lowToHigh.length, topLevel.length);
+    toast('Внутренняя ошибка сортировки — операция отменена', 'close');
+    return false;
+  }
+
+  /* computeLayerNumbers() присваивает номера, идя от КОНЦА массива. */
+  var topReversed = lowToHigh.slice().reverse();
+
+  pushHistory();
+
+  objects = topReversed.concat(children);
+
+  /* Сброс состояния. */
+  layerSortState.assigning   = false;
+  layerSortState.assignments = [];
+  layerSortState.counter     = 0;
+  layerSortState.excludeIds  = null;
+  layerSortState.availCount  = 0;
+
+  selection = [];
+  nodeSel.clear();
+
+  layerSortRender();
+  layerSortUpdateBanner();
+  afterChange();
+
+  /* Валидация результата для отладки и наглядности. */
+  var after = computeLayerNumbers();
+  var minN = Infinity, maxN = -Infinity, total = 0;
+  for(var k in after){
+    if(after[k] < minN) minN = after[k];
+    if(after[k] > maxN) maxN = after[k];
+    total++;
+  }
+  console.log('Нумерация после применения: ' + total + ' объектов, номера ' + minN + '…' + maxN);
+
+  return true;
+}
+
+/* Привязка UI карточки. Вызывается один раз из init(). */
+function bindLayerSortUI(){
+  var sw        = $('#lsEnable');
+  var inp       = $('#lsStart');
+  var assignBtn = $('#lsAssignBtn');
+  var finishBtn = $('#lsFinishBtn');
+  if(!sw || !inp || !assignBtn || !finishBtn) return;
+
+  /* Свитч: включить / выключить режим. */
+  sw.onchange = function(){
+    layerSortState.enabled = !!sw.checked;
+        if(!layerSortState.enabled){
+      /* При выключении сбрасываем всё. */
+      layerSortState.assigning   = false;
+      layerSortState.assignments = [];
+      layerSortState.counter     = 0;
+      layerSortState.excludeIds  = null;
+      layerSortState.availCount  = 0;
+      layerSortUpdateBanner();
+      renderObjects();
+      renderOverlay();
+      renderLayers();
+    }
+    layerSortRender();
+    scheduleSave();
+  };
+
+  /* Поле «Стартовый номер». */
+  inp.onchange = function(){
+    var v = parseInt(inp.value, 10);
+    if(isNaN(v) || v < 1) v = 1;
+    layerSortState.startNum = v;
+    inp.value = v;
+    layerSortRender();
+    scheduleSave();
+  };
+
+  /* Кнопка «Назначить» — сбрасывает список и включает приём кликов. */
+    /* Кнопка «Нумерация» — сбрасывает список и включает приём кликов. */
+  assignBtn.onclick = function(){
+    if(!layerSortState.enabled){
+      toast('Сначала включите режим');
+      return;
+    }
+
+    /* Определяем «зону переназначения»: объекты с текущим номером
+       >= стартового. Объекты с номером < стартового запоминаем
+       в excludeIds — клики по ним будут проигнорированы.
+       Это исключает дубликаты и «уезд» первых слоёв. */
+    var curNums = computeLayerNumbers();
+    var start = Math.max(1, layerSortState.startNum | 0);
+    var excludeIds  = {};
+    var availCount  = 0;
+    for(var ei = 0; ei < objects.length; ei++){
+      var eo = objects[ei];
+      if(eo.type === 'group' || eo.group === undefined){
+        var en = curNums[eo.id];
+        if(en === undefined) en = Infinity;
+        if(en < start) excludeIds[eo.id] = true;
+        else           availCount++;
+      }
+    }
+
+    layerSortState.assigning   = true;
+    layerSortState.assignments = [];
+    layerSortState.counter     = start;
+    layerSortState.excludeIds  = excludeIds;
+    layerSortState.availCount  = availCount;
+
+    layerSortRender();
+    layerSortUpdateBanner();
+    renderObjects();
+    renderOverlay();
+    renderLayers();
+
+    if(availCount === 0){
+      toast('Нет объектов для переназначения: стартовый номер слишком велик');
+    } else {
+      toast('Кликайте объекты на холсте — доступно ' + availCount, 'crosshair');
+    }
+  };
+
+   /* Кнопка «Применить» — применяет назначения. */
+  finishBtn.onclick = function(){
+    if(!layerSortState.assigning){
+      toast('Режим нумерации не активен');
+      return;
+    }
+    if(!layerSortState.assignments.length){
+      toast('Кликните хотя бы один объект на холсте');
+      return;
+    }
+    var n = layerSortState.assignments.length;
+    var ok = layerSortApply();
+    if(ok) toast('Слои пересортированы: ' + n + ' объ.', 'check');
+  };
+
+  layerSortRender();
 }
 /* ═══════════════ ПАНЕЛЬ СВОЙСТВ ═══════════════ */
 function cardHTML(title,note,body,id){
@@ -10295,6 +10767,45 @@ showCtx(e.clientX,e.clientY,w);
 return;
 }
 if(e.button!==0) return;
+
+/* ═══ Режим полуавтоматической сортировки: приём кликов ═══ */
+if(layerSortState.assigning){
+  var lsHit = topObjectAt(w);
+  if(!lsHit){
+    toast('Кликните по объекту');
+  } else if(layerSortState.excludeIds && layerSortState.excludeIds[lsHit.id]){
+    /* Объект с номером ниже стартового — по нему кликать нельзя. */
+    toast('Объект ниже стартового — не переназначается');
+  } else {
+    /* Проверка «уже назначен» — по id. */
+    var lsDup = false;
+    for(var lsi = 0; lsi < layerSortState.assignments.length; lsi++){
+      if(layerSortState.assignments[lsi].id === lsHit.id){ lsDup = true; break; }
+    }
+    if(lsDup){
+      toast('Этот объект уже назначен');
+    } else {
+      layerSortState.assignments.push({
+        id:   lsHit.id,
+        num:  layerSortState.counter,
+        name: lsHit.name || 'объект'
+      });
+      layerSortState.counter++;
+      layerSortRender();
+      layerSortUpdateBanner();
+      renderObjects();
+      renderOverlay();
+      renderLayers();
+
+      /* Если переназначили все доступные — мягко подскажем. */
+      if(layerSortState.availCount &&
+         layerSortState.assignments.length === layerSortState.availCount){
+        toast('Все доступные объекты назначены — жмите «Применить»', 'check');
+      }
+    }
+  }
+  return;   /* блокируем дальнейшую обработку клика */
+}
 
 /* ═══ Перетаскивание направляющей за кружок ═══
    Приоритет над обычной обработкой — кружок является "ручкой".
@@ -12847,6 +13358,18 @@ break;
 }
 deleteSel(); break;
 case 'escape':
+if(layerSortState.assigning){
+  layerSortState.assigning   = false;
+  layerSortState.assignments = [];
+  layerSortState.counter     = 0;
+  layerSortRender();
+  layerSortUpdateBanner();
+  renderObjects();
+  renderOverlay();
+  renderLayers();
+  toast('Режим нумерации отменён');
+  break;
+}
 if($('#helpOverlay').classList.contains('show')){hideHelp();break;}
 if($('#ctxMenu').classList.contains('show')){hideCtx();break;}
 if(hasPendingState()){cancelPending();break;}
@@ -13817,7 +14340,7 @@ function bindCalcModalUI(){
 }
 /* ═══════════════ ИНИЦИАЛИЗАЦИЯ ═══════════════ */
 function init(){
-buildToolbar(); buildRightPanel(); buildTopbar(); buildSide(); buildNestCard(); buildStatus(); buildSimBar(); bindCam(); syncCamInputs(); bindOsnapUI(); bindGridPopover(); bindGuideUI(); bindFilesUI(); bindHelpTabs();
+buildToolbar(); buildRightPanel(); buildTopbar(); buildSide(); buildNestCard(); buildStatus(); buildSimBar(); bindCam(); syncCamInputs(); bindOsnapUI(); bindGridPopover(); bindGuideUI(); bindFilesUI(); bindHelpTabs(); bindLayerSortUI();
 var clickCount=0, clickTimer=null;
 $('#logo').addEventListener('click',function(){
 clickCount++;
