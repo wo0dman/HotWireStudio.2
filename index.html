@@ -6869,17 +6869,38 @@ function renderLabels(){
            + 'font-family="JetBrains Mono,monospace" style="pointer-events:none">'+num+'</text>';
     }
 
-    /* 1) Номера слоёв — в центроиде фигуры, оранжевые (как раньше). */
-    if(showNumbers){
+    /* ─── Карта назначений (только в активном режиме нумерации) ───
+       id → новый номер слоя. Пустая, если режим не активен. */
+    var lsAssigned = null;
+    if(layerSortState.assigning && layerSortState.assignments.length){
+        lsAssigned = {};
+        for(var la = 0; la < layerSortState.assignments.length; la++){
+            var lsa = layerSortState.assignments[la];
+            lsAssigned[lsa.id] = lsa.num;
+        }
+    }
+
+    /* 1) Номера слоёв — в центроиде фигуры.
+          В обычном режиме — оранжевые (как раньше).
+          В режиме нумерации: назначенные объекты — ЗЕЛЁНЫЕ с новым номером,
+          они рисуются тем же size'ом поверх штатных оранжевых. */
+    if(showNumbers || lsAssigned){
         for(var i=0;i<objects.length;i++){
             var o=objects[i];
             if(o.type==='group') continue;
             if(!isObjectVisible(o)) continue;
             if(!o.points||!o.points.length) continue;
-            var num=currentLayerNumbers[o.id];
-            if(num===undefined) continue;
             var an=labelAnchor(o);
-            place(num, an.x, an.y, '#FF9500');
+
+            if(lsAssigned && lsAssigned[o.id] !== undefined){
+                /* Назначенный — зелёный маркер с НОВЫМ номером. */
+                place(lsAssigned[o.id], an.x, an.y, '#34C759');
+            } else if(showNumbers){
+                /* Обычный — оранжевый с текущим номером слоя. */
+                var num=currentLayerNumbers[o.id];
+                if(num===undefined) continue;
+                place(num, an.x, an.y, '#FF9500');
+            }
         }
     }
 
@@ -7360,25 +7381,7 @@ function guideHandleAtWorld(w){
 function renderOverlay(){
 var s=viewScaleEff(), px=function(v){return v/s;};
 var h='';
-/* ═══ Полуавтоматическая сортировка: бейджи номеров ═══ */
-if(layerSortState.assigning && layerSortState.assignments.length){
-  var sLs = viewScaleEff();
-  for(var lsq = 0; lsq < layerSortState.assignments.length; lsq++){
-    var lsa = layerSortState.assignments[lsq];
-    var lsObj = findObj(lsa.id);
-    if(!lsObj) continue;
-    var lsA = layerSortAnchor(lsObj);
-    var lsR = 11 / sLs;
-    h += '<circle cx="'+lsA.x+'" cy="'+lsA.y+'" r="'+lsR+'"'
-       + ' fill="#FF9500" stroke="#fff" stroke-width="2"'
-       + ' vector-effect="non-scaling-stroke" pointer-events="none"/>';
-    h += '<text x="'+lsA.x+'" y="'+lsA.y+'" text-anchor="middle"'
-       + ' dominant-baseline="central" font-size="'+(11/sLs)+'"'
-       + ' font-weight="700" fill="#fff"'
-       + ' font-family="JetBrains Mono,monospace"'
-       + ' pointer-events="none">'+lsa.num+'</text>';
-  }
-}
+
 /* ═══ Ghost во время перетаскивания направляющей ═══
    Настоящий кружок «живёт» у края холста и туда не убегает.
    Показываем его «призрак» прямо под курсором — чтобы было видно,
