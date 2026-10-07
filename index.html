@@ -4752,6 +4752,14 @@ return;
 }
 pushHistory();
 var ids = [];
+/* Допуск линеаризации берём тот же, что и в настройках станка
+   (вкладка «Станок» → «Аппроксимация»). Текст из любого шрифта
+   всегда содержит кривые Безье — превращаем их в полилинии сразу,
+   чтобы:
+     • G-code получался без C-команд (совместим с любым контроллером);
+     • мозаика (nesting) считалась быстрее и точнее;
+     • булевы операции (union/diff/intersect) не буксовали на кривых. */
+var linTol = +gset.tol || 0.05;
 for(var i = 0; i < contours.length; i++){
 var c = contours[i];
 /* Сдвигаем к точке клика */
@@ -4762,11 +4770,14 @@ var name = textState.content.length > 12
 ? textState.content.substring(0, 12) + '…'
 : textState.content;
 var o = addObject(pts, true, name + ' (' + (i+1) + ')');
+/* Линеаризация — до pushHistory уже сделан, объект лежит в objects,
+   отмена (Ctrl+Z) откатит и создание, и линеаризацию одним шагом. */
+linearizeObject(o, linTol);
 ids.push(o.id);
 }
 selection = ids;
 afterChange();
-toast('Текст конвертирован: ' + contours.length + ' контуров', 'check');
+toast('Текст конвертирован и линеаризован: ' + contours.length + ' контуров', 'check');
 setTool('select');
 }
 
@@ -8644,20 +8655,10 @@ box.innerHTML=topCards+
 '<p>Кликните объект на холсте или выделите рамкой. Двойной клик — редактирование узлов.</p>'+
 '</div>'+
 '<div class="btnrow" style="padding-top:2px;padding-bottom:14px">'+
-'<button class="btn tint" id="qRect">'+icon('rect',14)+' Прямоуг.</button>'+
-'<button class="btn tint" id="qCircle">'+icon('ellipse',14)+' Круг</button>'+
-'<button class="btn tint" id="qPoly">'+icon('polygonTool',14)+' Многоуг.</button>'+
-'<button class="btn tint" id="qText">'+icon('textTool',14)+' Текст</button>'+
-'</div>'+
-'<div class="btnrow" style="padding-top:0;padding-bottom:14px">'+
 '<button class="btn" id="qSample">'+icon('flame',14)+' Пример</button>'+
 '<button class="btn" id="qImport">'+icon('upload',14)+' Импорт</button>'+
 '<button class="btn" id="qHelp">'+icon('help',14)+' Справка</button>'+
 '</div></div>';
-$('#qRect').onclick=function(){pushHistory();var b=visibleWorld();var o=addObject(rectPts(Math.round(b.x0+40),Math.round(b.y0+40),120,80),true,'Прямоугольник');selection=[o.id];afterChange();};
-$('#qCircle').onclick=function(){pushHistory();var b=visibleWorld();var o=addObject(circlePtsFactory(Math.round(b.x0+80),Math.round(b.y0+80),40),true,'Круг');selection=[o.id];afterChange();};
-$('#qPoly').onclick=function(){setTool('poly');};
-$('#qText').onclick=function(){setTool('text');};
 $('#qSample').onclick=makeSample;
 $('#qImport').onclick=function(){$('#fileImport').click();};
 $('#qHelp').onclick=showHelp;
